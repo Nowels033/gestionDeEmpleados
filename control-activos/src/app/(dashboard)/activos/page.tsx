@@ -2,7 +2,6 @@
 
 import * as React from "react";
 import { motion } from "framer-motion";
-import Link from "next/link";
 import {
   Package,
   Plus,
@@ -20,13 +19,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { SafeSelect } from "@/components/ui/select";
+import { Loading } from "@/components/ui/loading";
+import { useFetch } from "@/lib/hooks/use-fetch";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -60,26 +55,11 @@ interface Asset {
   location: string | null;
   qrCode: string | null;
   ensLevel: string;
-  category: {
-    id: string;
-    name: string;
-    icon: string | null;
-  };
-  securityUser: {
-    id: string;
-    name: string;
-    lastName: string;
-  };
+  category: { id: string; name: string; icon: string | null };
+  securityUser: { id: string; name: string; lastName: string };
   assignments: {
-    user: {
-      id: string;
-      name: string;
-      lastName: string;
-    } | null;
-    department: {
-      id: string;
-      name: string;
-    } | null;
+    user: { id: string; name: string; lastName: string } | null;
+    department: { id: string; name: string } | null;
   }[];
 }
 
@@ -95,31 +75,31 @@ interface User {
   lastName: string;
 }
 
-const statusColors: Record<string, { label: string; variant: "success" | "info" | "warning" | "destructive" }> = {
+const statusConfig: Record<string, { label: string; variant: "success" | "info" | "warning" | "destructive" }> = {
   AVAILABLE: { label: "Disponible", variant: "success" },
   ASSIGNED: { label: "Asignado", variant: "info" },
   MAINTENANCE: { label: "Mantenimiento", variant: "warning" },
   RETIRED: { label: "Dado de baja", variant: "destructive" },
 };
 
-const ensColors: Record<string, { label: string; color: string }> = {
+const ensConfig: Record<string, { label: string; color: string }> = {
   BASIC: { label: "Básico", color: "text-emerald-500" },
   MEDIUM: { label: "Medio", color: "text-amber-500" },
   HIGH: { label: "Alto", color: "text-red-500" },
 };
 
 export default function ActivosPage() {
-  const [assets, setAssets] = React.useState<Asset[]>([]);
-  const [categories, setCategories] = React.useState<Category[]>([]);
-  const [users, setUsers] = React.useState<User[]>([]);
-  const [loading, setLoading] = React.useState(true);
+  const { data: assets, loading: loadingAssets, refetch: refetchAssets } = useFetch<Asset[]>("/api/activos", []);
+  const { data: categories } = useFetch<Category[]>("/api/categorias", []);
+  const { data: users } = useFetch<User[]>("/api/usuarios", []);
+
   const [viewMode, setViewMode] = React.useState<"grid" | "list">("grid");
   const [searchQuery, setSearchQuery] = React.useState("");
   const [statusFilter, setStatusFilter] = React.useState("all");
   const [categoryFilter, setCategoryFilter] = React.useState("all");
   const [dialogOpen, setDialogOpen] = React.useState(false);
+  const [submitting, setSubmitting] = React.useState(false);
 
-  // Form state
   const [formData, setFormData] = React.useState({
     name: "",
     description: "",
@@ -135,36 +115,30 @@ export default function ActivosPage() {
     securityUserId: "",
   });
 
-  React.useEffect(() => {
-    fetchData();
-  }, []);
-
-  const fetchData = async () => {
-    try {
-      const [assetsRes, categoriesRes, usersRes] = await Promise.all([
-        fetch("/api/activos"),
-        fetch("/api/categorias"),
-        fetch("/api/usuarios"),
-      ]);
-
-      const [assetsData, categoriesData, usersData] = await Promise.all([
-        assetsRes.json(),
-        categoriesRes.json(),
-        usersRes.json(),
-      ]);
-
-      setAssets(assetsData);
-      setCategories(categoriesData);
-      setUsers(usersData);
-    } catch (error) {
-      console.error("Error fetching data:", error);
-      toast.error("Error al cargar los datos");
-    } finally {
-      setLoading(false);
-    }
+  const resetForm = () => {
+    setFormData({
+      name: "",
+      description: "",
+      serialNumber: "",
+      brand: "",
+      model: "",
+      purchasePrice: "",
+      currentValue: "",
+      location: "",
+      qrCode: "",
+      ensLevel: "BASIC",
+      categoryId: "",
+      securityUserId: "",
+    });
   };
 
   const handleCreateAsset = async () => {
+    if (!formData.name || !formData.categoryId || !formData.securityUserId) {
+      toast.error("Completa los campos requeridos");
+      return;
+    }
+
+    setSubmitting(true);
     try {
       const response = await fetch("/api/activos", {
         method: "POST",
@@ -180,27 +154,15 @@ export default function ActivosPage() {
       if (response.ok) {
         toast.success("Activo creado correctamente");
         setDialogOpen(false);
-        setFormData({
-          name: "",
-          description: "",
-          serialNumber: "",
-          brand: "",
-          model: "",
-          purchasePrice: "",
-          currentValue: "",
-          location: "",
-          qrCode: "",
-          ensLevel: "BASIC",
-          categoryId: "",
-          securityUserId: "",
-        });
-        fetchData();
+        resetForm();
+        refetchAssets();
       } else {
         toast.error("Error al crear el activo");
       }
     } catch (error) {
-      console.error("Error creating asset:", error);
       toast.error("Error al crear el activo");
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -209,11 +171,8 @@ export default function ActivosPage() {
       asset.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (asset.serialNumber?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false) ||
       (asset.qrCode?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false);
-
     const matchesStatus = statusFilter === "all" || asset.status === statusFilter;
-    const matchesCategory =
-      categoryFilter === "all" || asset.category.id === categoryFilter;
-
+    const matchesCategory = categoryFilter === "all" || asset.category.id === categoryFilter;
     return matchesSearch && matchesStatus && matchesCategory;
   });
 
@@ -226,12 +185,28 @@ export default function ActivosPage() {
     }).format(value);
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-      </div>
-    );
+  // Preparar opciones para selects
+  const categoryOptions = categories.map((cat) => ({
+    value: cat.id,
+    label: cat.name,
+    icon: cat.icon || undefined,
+  }));
+
+  const userOptions = users.map((user) => ({
+    value: user.id,
+    label: `${user.name} ${user.lastName}`,
+  }));
+
+  const statusOptions = [
+    { value: "all", label: "Todos los estados" },
+    { value: "AVAILABLE", label: "Disponible" },
+    { value: "ASSIGNED", label: "Asignado" },
+    { value: "MAINTENANCE", label: "Mantenimiento" },
+    { value: "RETIRED", label: "Dado de baja" },
+  ];
+
+  if (loadingAssets) {
+    return <Loading text="Cargando activos..." />;
   }
 
   return (
@@ -245,7 +220,7 @@ export default function ActivosPage() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Activos</h1>
           <p className="text-muted-foreground">
-            Gestiona todos los activos de tu empresa ({assets.length} total)
+            {assets.length} activos registrados
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -255,7 +230,7 @@ export default function ActivosPage() {
           </Button>
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger asChild>
-              <Button size="sm">
+              <Button size="sm" onClick={() => { resetForm(); setDialogOpen(true); }}>
                 <Plus className="h-4 w-4 mr-2" />
                 Nuevo Activo
               </Button>
@@ -263,154 +238,103 @@ export default function ActivosPage() {
             <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Nuevo Activo</DialogTitle>
-                <DialogDescription>
-                  Ingresa los datos del nuevo activo
-                </DialogDescription>
+                <DialogDescription>Ingresa los datos del nuevo activo</DialogDescription>
               </DialogHeader>
               <div className="grid gap-4 py-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="name">Nombre *</Label>
+                    <Label>Nombre *</Label>
                     <Input
-                      id="name"
                       placeholder="Ej: Laptop Dell XPS 15"
                       value={formData.name}
-                      onChange={(e) =>
-                        setFormData({ ...formData, name: e.target.value })
-                      }
+                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="category">Categoría *</Label>
-                    <Select
+                    <Label>Categoría *</Label>
+                    <SafeSelect
                       value={formData.categoryId}
-                      onValueChange={(value) =>
-                        setFormData({ ...formData, categoryId: value })
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Seleccionar" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {categories.map((cat) => (
-                          <SelectItem key={cat.id} value={cat.id}>
-                            {cat.icon} {cat.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                      onValueChange={(v) => setFormData({ ...formData, categoryId: v })}
+                      placeholder="Seleccionar"
+                      items={categoryOptions}
+                    />
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="brand">Marca</Label>
+                    <Label>Marca</Label>
                     <Input
-                      id="brand"
                       placeholder="Ej: Dell"
                       value={formData.brand}
-                      onChange={(e) =>
-                        setFormData({ ...formData, brand: e.target.value })
-                      }
+                      onChange={(e) => setFormData({ ...formData, brand: e.target.value })}
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="model">Modelo</Label>
+                    <Label>Modelo</Label>
                     <Input
-                      id="model"
-                      placeholder="Ej: XPS 15 9530"
+                      placeholder="Ej: XPS 15"
                       value={formData.model}
-                      onChange={(e) =>
-                        setFormData({ ...formData, model: e.target.value })
-                      }
+                      onChange={(e) => setFormData({ ...formData, model: e.target.value })}
                     />
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="serialNumber">Número de Serie</Label>
+                    <Label>Número de Serie</Label>
                     <Input
-                      id="serialNumber"
-                      placeholder="Ej: DLXPS-2024-0042"
+                      placeholder="Ej: DLXPS-0042"
                       value={formData.serialNumber}
-                      onChange={(e) =>
-                        setFormData({ ...formData, serialNumber: e.target.value })
-                      }
+                      onChange={(e) => setFormData({ ...formData, serialNumber: e.target.value })}
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="price">Precio de Compra</Label>
+                    <Label>Precio de Compra</Label>
                     <Input
-                      id="price"
                       type="number"
                       placeholder="35000"
                       value={formData.purchasePrice}
-                      onChange={(e) =>
-                        setFormData({ ...formData, purchasePrice: e.target.value })
-                      }
+                      onChange={(e) => setFormData({ ...formData, purchasePrice: e.target.value })}
                     />
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="location">Ubicación</Label>
+                    <Label>Ubicación</Label>
                     <Input
-                      id="location"
-                      placeholder="Ej: Edificio A, Piso 3"
+                      placeholder="Ej: Edificio A"
                       value={formData.location}
-                      onChange={(e) =>
-                        setFormData({ ...formData, location: e.target.value })
-                      }
+                      onChange={(e) => setFormData({ ...formData, location: e.target.value })}
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="ensLevel">Nivel ENS</Label>
-                    <Select
+                    <Label>Nivel ENS</Label>
+                    <SafeSelect
                       value={formData.ensLevel}
-                      onValueChange={(value) =>
-                        setFormData({ ...formData, ensLevel: value })
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Seleccionar" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="BASIC">Básico</SelectItem>
-                        <SelectItem value="MEDIUM">Medio</SelectItem>
-                        <SelectItem value="HIGH">Alto</SelectItem>
-                      </SelectContent>
-                    </Select>
+                      onValueChange={(v) => setFormData({ ...formData, ensLevel: v })}
+                      items={[
+                        { value: "BASIC", label: "Básico" },
+                        { value: "MEDIUM", label: "Medio" },
+                        { value: "HIGH", label: "Alto" },
+                      ]}
+                    />
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="securityUser">Responsable de Seguridad *</Label>
-                  <Select
+                  <Label>Responsable de Seguridad *</Label>
+                  <SafeSelect
                     value={formData.securityUserId}
-                    onValueChange={(value) =>
-                      setFormData({ ...formData, securityUserId: value })
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Seleccionar" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {users.map((user) => (
-                        <SelectItem key={user.id} value={user.id}>
-                          {user.name} {user.lastName}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    onValueChange={(v) => setFormData({ ...formData, securityUserId: v })}
+                    placeholder="Seleccionar"
+                    items={userOptions}
+                  />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="description">Descripción</Label>
+                  <Label>Descripción</Label>
                   <Textarea
-                    id="description"
                     placeholder="Descripción del activo..."
                     rows={3}
                     value={formData.description}
-                    onChange={(e) =>
-                      setFormData({ ...formData, description: e.target.value })
-                    }
+                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   />
                 </div>
               </div>
@@ -418,7 +342,9 @@ export default function ActivosPage() {
                 <Button variant="outline" onClick={() => setDialogOpen(false)}>
                   Cancelar
                 </Button>
-                <Button onClick={handleCreateAsset}>Guardar</Button>
+                <Button onClick={handleCreateAsset} disabled={submitting}>
+                  {submitting ? "Guardando..." : "Guardar"}
+                </Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
@@ -430,38 +356,27 @@ export default function ActivosPage() {
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Buscar por nombre, código o serie..."
+            placeholder="Buscar activos..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-10"
           />
         </div>
         <div className="flex items-center gap-2">
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-[150px]">
-              <SelectValue placeholder="Estado" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos</SelectItem>
-              <SelectItem value="AVAILABLE">Disponible</SelectItem>
-              <SelectItem value="ASSIGNED">Asignado</SelectItem>
-              <SelectItem value="MAINTENANCE">Mantenimiento</SelectItem>
-              <SelectItem value="RETIRED">Dado de baja</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-            <SelectTrigger className="w-[150px]">
-              <SelectValue placeholder="Categoría" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todas</SelectItem>
-              {categories.map((cat) => (
-                <SelectItem key={cat.id} value={cat.id}>
-                  {cat.icon} {cat.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <SafeSelect
+            value={statusFilter}
+            onValueChange={setStatusFilter}
+            placeholder="Estado"
+            items={statusOptions}
+            className="w-[150px]"
+          />
+          <SafeSelect
+            value={categoryFilter}
+            onValueChange={setCategoryFilter}
+            placeholder="Categoría"
+            items={[{ value: "all", label: "Todas" }, ...categoryOptions]}
+            className="w-[150px]"
+          />
           <div className="flex items-center border rounded-lg">
             <Button
               variant={viewMode === "grid" ? "secondary" : "ghost"}
@@ -483,20 +398,18 @@ export default function ActivosPage() {
         </div>
       </div>
 
-      {/* Results count */}
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">
-          Mostrando {filteredAssets.length} de {assets.length} activos
-        </p>
-      </div>
+      {/* Results */}
+      <p className="text-sm text-muted-foreground">
+        Mostrando {filteredAssets.length} de {assets.length} activos
+      </p>
 
-      {/* Assets Grid/List */}
+      {/* Assets */}
       {filteredAssets.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
             <Package className="h-12 w-12 text-muted-foreground/30 mb-4" />
-            <p className="text-muted-foreground">No se encontraron activos</p>
-            <Button className="mt-4" onClick={() => setDialogOpen(true)}>
+            <p className="text-muted-foreground mb-4">No se encontraron activos</p>
+            <Button onClick={() => setDialogOpen(true)}>
               <Plus className="h-4 w-4 mr-2" />
               Crear primer activo
             </Button>
@@ -512,112 +425,65 @@ export default function ActivosPage() {
               transition={{ delay: index * 0.05 }}
             >
               <Card className="overflow-hidden hover:shadow-lg transition-all duration-300 group">
-                <div className="relative h-48 bg-gradient-to-br from-muted to-muted/50 flex items-center justify-center overflow-hidden">
+                <div className="relative h-48 bg-gradient-to-br from-muted to-muted/50 flex items-center justify-center">
                   <Package className="h-16 w-16 text-muted-foreground/30 group-hover:scale-110 transition-transform duration-300" />
                   <Badge
-                    variant={statusColors[asset.status]?.variant}
+                    variant={statusConfig[asset.status]?.variant}
                     className="absolute top-3 right-3"
                   >
-                    {statusColors[asset.status]?.label}
+                    {statusConfig[asset.status]?.label}
                   </Badge>
                   {asset.qrCode && (
-                    <div className="absolute bottom-3 left-3">
-                      <Badge
-                        variant="outline"
-                        className="bg-background/80 backdrop-blur-sm"
-                      >
-                        <QrCode className="h-3 w-3 mr-1" />
-                        {asset.qrCode}
-                      </Badge>
-                    </div>
+                    <Badge variant="outline" className="absolute bottom-3 left-3 bg-background/80">
+                      <QrCode className="h-3 w-3 mr-1" />
+                      {asset.qrCode}
+                    </Badge>
                   )}
                 </div>
-
                 <CardContent className="p-4">
-                  <div className="space-y-3">
-                    <div>
-                      <h3 className="font-semibold text-lg line-clamp-1">
-                        {asset.name}
-                      </h3>
-                      <p className="text-sm text-muted-foreground">
-                        {asset.brand} {asset.model && `• ${asset.model}`}
-                      </p>
+                  <h3 className="font-semibold text-lg line-clamp-1">{asset.name}</h3>
+                  <p className="text-sm text-muted-foreground mb-3">
+                    {asset.brand} {asset.model && `• ${asset.model}`}
+                  </p>
+                  <div className="space-y-2 text-sm mb-4">
+                    <div className="flex items-center gap-2">
+                      <span className="text-muted-foreground">🏷️</span>
+                      <span>{asset.category.icon} {asset.category.name}</span>
                     </div>
-
-                    <div className="space-y-2 text-sm">
-                      {asset.assignments[0]?.user && (
-                        <div className="flex items-center gap-2">
-                          <span className="text-muted-foreground">👤</span>
-                          <span>
-                            {asset.assignments[0].user.name}{" "}
-                            {asset.assignments[0].user.lastName}
-                          </span>
-                        </div>
-                      )}
+                    {asset.currentValue && (
                       <div className="flex items-center gap-2">
-                        <span className="text-muted-foreground">🏷️</span>
-                        <span>
-                          {asset.category.icon} {asset.category.name}
-                        </span>
+                        <span className="text-muted-foreground">💰</span>
+                        <span className="font-medium">{formatCurrency(asset.currentValue)}</span>
                       </div>
-                      {asset.currentValue && (
-                        <div className="flex items-center gap-2">
-                          <span className="text-muted-foreground">💰</span>
-                          <span className="font-medium">
-                            {formatCurrency(asset.currentValue)}
-                          </span>
-                        </div>
-                      )}
-                      <div className="flex items-center gap-2">
-                        <span className="text-muted-foreground">🔒</span>
-                        <span>
-                          {asset.securityUser.name} {asset.securityUser.lastName}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-muted-foreground">📋</span>
-                        <span className={ensColors[asset.ensLevel]?.color}>
-                          ENS: {ensColors[asset.ensLevel]?.label}
-                        </span>
-                      </div>
+                    )}
+                    <div className="flex items-center gap-2">
+                      <span className="text-muted-foreground">🔒</span>
+                      <span>{asset.securityUser.name} {asset.securityUser.lastName}</span>
                     </div>
-
-                    <div className="flex items-center gap-2 pt-2 border-t">
-                      <Button variant="outline" size="sm" className="flex-1">
-                        <Eye className="h-4 w-4 mr-1" />
-                        Ver
-                      </Button>
-                      <Button variant="outline" size="sm" className="flex-1">
-                        <Edit className="h-4 w-4 mr-1" />
-                        Editar
-                      </Button>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            variant="outline"
-                            size="icon"
-                            className="h-9 w-9"
-                          >
-                            <MoreVertical className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem>
-                            <FileDown className="h-4 w-4 mr-2" />
-                            Exportar PDF
-                          </DropdownMenuItem>
-                          <DropdownMenuItem>
-                            <QrCode className="h-4 w-4 mr-2" />
-                            Ver QR
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem className="text-destructive">
-                            <Trash2 className="h-4 w-4 mr-2" />
-                            Eliminar
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 pt-2 border-t">
+                    <Button variant="outline" size="sm" className="flex-1">
+                      <Eye className="h-4 w-4 mr-1" /> Ver
+                    </Button>
+                    <Button variant="outline" size="sm" className="flex-1">
+                      <Edit className="h-4 w-4 mr-1" /> Editar
+                    </Button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="outline" size="icon" className="h-9 w-9">
+                          <MoreVertical className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem>
+                          <FileDown className="h-4 w-4 mr-2" /> PDF
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem className="text-destructive">
+                          <Trash2 className="h-4 w-4 mr-2" /> Eliminar
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
                 </CardContent>
               </Card>
@@ -635,84 +501,35 @@ export default function ActivosPage() {
                   <th className="text-left p-4 font-medium text-sm">Categoría</th>
                   <th className="text-left p-4 font-medium text-sm">Estado</th>
                   <th className="text-left p-4 font-medium text-sm">Valor</th>
-                  <th className="text-left p-4 font-medium text-sm">Resp. Seg.</th>
                   <th className="text-right p-4 font-medium text-sm">Acciones</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredAssets.map((asset, index) => (
-                  <motion.tr
-                    key={asset.id}
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: index * 0.03 }}
-                    className="border-b hover:bg-muted/30 transition-colors"
-                  >
-                    <td className="p-4 text-sm font-mono">
-                      {asset.qrCode || asset.id.slice(0, 8)}
-                    </td>
+                {filteredAssets.map((asset) => (
+                  <tr key={asset.id} className="border-b hover:bg-muted/30">
+                    <td className="p-4 text-sm font-mono">{asset.qrCode || asset.id.slice(0, 8)}</td>
                     <td className="p-4">
-                      <div>
-                        <p className="font-medium">{asset.name}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {asset.brand} {asset.model}
-                        </p>
-                      </div>
+                      <p className="font-medium">{asset.name}</p>
+                      <p className="text-xs text-muted-foreground">{asset.brand} {asset.model}</p>
                     </td>
-                    <td className="p-4 text-sm">
-                      {asset.category.icon} {asset.category.name}
-                    </td>
+                    <td className="p-4 text-sm">{asset.category.icon} {asset.category.name}</td>
                     <td className="p-4">
-                      <Badge variant={statusColors[asset.status]?.variant}>
-                        {statusColors[asset.status]?.label}
+                      <Badge variant={statusConfig[asset.status]?.variant}>
+                        {statusConfig[asset.status]?.label}
                       </Badge>
                     </td>
-                    <td className="p-4 text-sm font-medium">
-                      {formatCurrency(asset.currentValue)}
-                    </td>
-                    <td className="p-4 text-sm">
-                      {asset.securityUser.name} {asset.securityUser.lastName}
-                    </td>
+                    <td className="p-4 text-sm font-medium">{formatCurrency(asset.currentValue)}</td>
                     <td className="p-4">
                       <div className="flex items-center justify-end gap-1">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8"
-                        >
+                        <Button variant="ghost" size="icon" className="h-8 w-8">
                           <Eye className="h-4 w-4" />
                         </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8"
-                        >
+                        <Button variant="ghost" size="icon" className="h-8 w-8">
                           <Edit className="h-4 w-4" />
                         </Button>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8"
-                            >
-                              <MoreVertical className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem>
-                              <FileDown className="h-4 w-4 mr-2" />
-                              PDF
-                            </DropdownMenuItem>
-                            <DropdownMenuItem className="text-destructive">
-                              <Trash2 className="h-4 w-4 mr-2" />
-                              Eliminar
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
                       </div>
                     </td>
-                  </motion.tr>
+                  </tr>
                 ))}
               </tbody>
             </table>

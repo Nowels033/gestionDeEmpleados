@@ -142,6 +142,47 @@ const SelectSeparator = React.forwardRef<
 ));
 SelectSeparator.displayName = SelectPrimitive.Separator.displayName;
 
+// Componente seguro para selects con datos dinámicos
+interface SafeSelectProps {
+  value: string;
+  onValueChange: (value: string) => void;
+  placeholder?: string;
+  items: { value: string; label: string; icon?: string }[];
+  emptyMessage?: string;
+  className?: string;
+}
+
+function SafeSelect({
+  value,
+  onValueChange,
+  placeholder = "Seleccionar",
+  items,
+  emptyMessage = "No hay opciones disponibles",
+  className,
+}: SafeSelectProps) {
+  return (
+    <Select value={value} onValueChange={onValueChange}>
+      <SelectTrigger className={className}>
+        <SelectValue placeholder={placeholder} />
+      </SelectTrigger>
+      <SelectContent>
+        {items.length > 0 ? (
+          items.map((item) => (
+            <SelectItem key={item.value} value={item.value}>
+              {item.icon && <span className="mr-2">{item.icon}</span>}
+              {item.label}
+            </SelectItem>
+          ))
+        ) : (
+          <div className="py-2 px-3 text-sm text-muted-foreground">
+            {emptyMessage}
+          </div>
+        )}
+      </SelectContent>
+    </Select>
+  );
+}
+
 export {
   Select,
   SelectGroup,
@@ -153,4 +194,5 @@ export {
   SelectSeparator,
   SelectScrollUpButton,
   SelectScrollDownButton,
+  SafeSelect,
 };

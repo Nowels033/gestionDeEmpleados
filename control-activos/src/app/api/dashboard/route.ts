@@ -102,13 +102,6 @@ export async function GET() {
     // Usuarios totales
     const totalUsers = await prisma.user.count();
 
-    // Mantenimiento pendiente
-    const pendingMaintenance = await prisma.maintenanceLog
-      ? await prisma.maintenanceLog.count({
-          where: { status: "PENDING" },
-        })
-      : 0;
-
     return NextResponse.json({
       stats: {
         totalAssets,
@@ -118,7 +111,6 @@ export async function GET() {
         retiredAssets,
         totalValue,
         totalUsers,
-        pendingMaintenance,
       },
       categoryStats,
       recentAssets,
@@ -127,7 +119,21 @@ export async function GET() {
   } catch (error) {
     console.error("Error fetching dashboard stats:", error);
     return NextResponse.json(
-      { error: "Error al obtener estadísticas" },
+      {
+        stats: {
+          totalAssets: 0,
+          assignedAssets: 0,
+          availableAssets: 0,
+          maintenanceAssets: 0,
+          retiredAssets: 0,
+          totalValue: 0,
+          totalUsers: 0,
+        },
+        categoryStats: [],
+        recentAssets: [],
+        departmentStats: [],
+        error: "Error al obtener estadísticas",
+      },
       { status: 500 }
     );
   }

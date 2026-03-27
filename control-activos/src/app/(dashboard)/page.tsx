@@ -13,6 +13,9 @@ import {
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { LoadingSkeleton } from "@/components/ui/loading";
+import { useFetch } from "@/lib/hooks/use-fetch";
 import {
   BarChart,
   Bar,
@@ -26,38 +29,55 @@ import {
   Cell,
 } from "recharts";
 
-interface DashboardData {
-  stats: {
-    totalAssets: number;
-    assignedAssets: number;
-    availableAssets: number;
-    maintenanceAssets: number;
-    totalValue: number;
-    totalUsers: number;
-  };
-  categoryStats: { name: string; value: number; icon: string }[];
-  recentAssets: {
-    id: string;
-    name: string;
-    category: { name: string };
-    status: string;
-    assignments: {
-      user: { name: string; lastName: string };
-    }[];
-  }[];
-  departmentStats: {
-    name: string;
-    employeeCount: number;
-    assetCount: number;
-    assetValue: number;
-  }[];
+interface DashboardStats {
+  totalAssets: number;
+  assignedAssets: number;
+  availableAssets: number;
+  maintenanceAssets: number;
+  totalValue: number;
+  totalUsers: number;
 }
 
-const statusColors: Record<string, string> = {
-  AVAILABLE: "success",
-  ASSIGNED: "info",
-  MAINTENANCE: "warning",
-  RETIRED: "destructive",
+interface CategoryStat {
+  name: string;
+  value: number;
+  icon: string | null;
+}
+
+interface RecentAsset {
+  id: string;
+  name: string;
+  category: { name: string };
+  status: string;
+  assignments: { user: { name: string; lastName: string } }[];
+}
+
+interface DepartmentStat {
+  name: string;
+  employeeCount: number;
+  assetCount: number;
+  assetValue: number;
+}
+
+interface DashboardData {
+  stats: DashboardStats;
+  categoryStats: CategoryStat[];
+  recentAssets: RecentAsset[];
+  departmentStats: DepartmentStat[];
+}
+
+const defaultData: DashboardData = {
+  stats: {
+    totalAssets: 0,
+    assignedAssets: 0,
+    availableAssets: 0,
+    maintenanceAssets: 0,
+    totalValue: 0,
+    totalUsers: 0,
+  },
+  categoryStats: [],
+  recentAssets: [],
+  departmentStats: [],
 };
 
 const statusLabels: Record<string, string> = {
@@ -73,9 +93,7 @@ const container = {
   hidden: { opacity: 0 },
   show: {
     opacity: 1,
-    transition: {
-      staggerChildren: 0.1,
-    },
+    transition: { staggerChildren: 0.1 },
   },
 };
 
@@ -85,24 +103,10 @@ const item = {
 };
 
 export default function DashboardPage() {
-  const [data, setData] = React.useState<DashboardData | null>(null);
-  const [loading, setLoading] = React.useState(true);
-
-  React.useEffect(() => {
-    fetchDashboardData();
-  }, []);
-
-  const fetchDashboardData = async () => {
-    try {
-      const response = await fetch("/api/dashboard");
-      const result = await response.json();
-      setData(result);
-    } catch (error) {
-      console.error("Error fetching dashboard:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { data, loading, error, refetch } = useFetch<DashboardData>(
+    "/api/dashboard",
+    defaultData
+  );
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("es-MX", {
@@ -113,49 +117,48 @@ export default function DashboardPage() {
   };
 
   if (loading) {
+    return <LoadingSkeleton />;
+  }
+
+  if (error) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      <div className="flex flex-col items-center justify-center py-12">
+        <p className="text-muted-foreground mb-4">{error}</p>
+        <Button onClick={refetch}>Reintentar</Button>
       </div>
     );
   }
 
-  if (!data) {
-    return (
-      <div className="text-center py-12">
-        <p className="text-muted-foreground">Error al cargar los datos</p>
-      </div>
-    );
-  }
+  const { stats, categoryStats, recentAssets, departmentStats } = data;
 
-  const stats = [
+  const statsCards = [
     {
       title: "Total Activos",
-      value: data.stats.totalAssets.toString(),
+      value: stats.totalAssets.toString(),
       icon: Package,
       color: "text-blue-500",
       bgColor: "bg-blue-500/10",
     },
     {
       title: "Asignados",
-      value: data.stats.assignedAssets.toString(),
-      change: `${Math.round(
-        (data.stats.assignedAssets / data.stats.totalAssets) * 100
-      )}%`,
+      value: stats.assignedAssets.toString(),
+      change: stats.totalAssets
+        ? `${Math.round((stats.assignedAssets / stats.totalAssets) * 100)}%`
+        : "0%",
       icon: CheckCircle,
       color: "text-emerald-500",
       bgColor: "bg-emerald-500/10",
     },
     {
       title: "En Mantenimiento",
-      value: data.stats.maintenanceAssets.toString(),
+      value: stats.maintenanceAssets.toString(),
       icon: AlertTriangle,
       color: "text-amber-500",
       bgColor: "bg-amber-500/10",
     },
     {
       title: "Valor Total",
-      value: formatCurrency(data.stats.totalValue),
+      value: formatCurrency(stats.totalValue),
       icon: TrendingUp,
       color: "text-purple-500",
       bgColor: "bg-purple-500/10",
@@ -181,7 +184,7 @@ export default function DashboardPage() {
 
       {/* Stats Cards */}
       <motion.div variants={item} className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {stats.map((stat, index) => (
+        {statsCards.map((stat, index) => (
           <Card key={index} className="overflow-hidden">
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
@@ -206,119 +209,94 @@ export default function DashboardPage() {
         ))}
       </motion.div>
 
-      {/* Charts Row */}
-      <motion.div variants={item} className="grid gap-4 md:grid-cols-2">
-        {/* Bar Chart */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Activos por Categoría</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="h-[300px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={data.categoryStats}>
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                  <XAxis
-                    dataKey="name"
-                    className="text-xs fill-muted-foreground"
-                    tick={{ fontSize: 12 }}
-                  />
-                  <YAxis
-                    className="text-xs fill-muted-foreground"
-                    tick={{ fontSize: 12 }}
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: "hsl(var(--card))",
-                      border: "1px solid hsl(var(--border))",
-                      borderRadius: "0.75rem",
-                      boxShadow: "0 10px 15px -3px rgb(0 0 0 / 0.1)",
-                    }}
-                  />
-                  <Bar
-                    dataKey="value"
-                    radius={[6, 6, 0, 0]}
-                    fill="hsl(var(--primary))"
-                  />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </CardContent>
-        </Card>
+      {/* Charts */}
+      {categoryStats.length > 0 && (
+        <motion.div variants={item} className="grid gap-4 md:grid-cols-2">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Activos por Categoría</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="h-[300px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={categoryStats}>
+                    <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                    <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+                    <YAxis tick={{ fontSize: 12 }} />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: "hsl(var(--card))",
+                        border: "1px solid hsl(var(--border))",
+                        borderRadius: "0.75rem",
+                      }}
+                    />
+                    <Bar dataKey="value" radius={[6, 6, 0, 0]} fill="hsl(var(--primary))" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </CardContent>
+          </Card>
 
-        {/* Pie Chart */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Distribución por Categoría</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="h-[300px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={data.categoryStats}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={60}
-                    outerRadius={100}
-                    paddingAngle={4}
-                    dataKey="value"
-                    nameKey="name"
-                  >
-                    {data.categoryStats.map((_, index) => (
-                      <Cell
-                        key={`cell-${index}`}
-                        fill={COLORS[index % COLORS.length]}
-                      />
-                    ))}
-                  </Pie>
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: "hsl(var(--card))",
-                      border: "1px solid hsl(var(--border))",
-                      borderRadius: "0.75rem",
-                      boxShadow: "0 10px 15px -3px rgb(0 0 0 / 0.1)",
-                    }}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-            <div className="flex flex-wrap justify-center gap-4 mt-4">
-              {data.categoryStats.map((entry, index) => (
-                <div key={index} className="flex items-center gap-2 text-sm">
-                  <div
-                    className="w-3 h-3 rounded-full"
-                    style={{ backgroundColor: COLORS[index % COLORS.length] }}
-                  />
-                  <span className="text-muted-foreground">
-                    {entry.icon} {entry.name}
-                  </span>
-                  <span className="font-medium">{entry.value}</span>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      </motion.div>
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Distribución</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="h-[300px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={categoryStats}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={60}
+                      outerRadius={100}
+                      paddingAngle={4}
+                      dataKey="value"
+                      nameKey="name"
+                    >
+                      {categoryStats.map((_, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="flex flex-wrap justify-center gap-4 mt-4">
+                {categoryStats.map((entry, index) => (
+                  <div key={index} className="flex items-center gap-2 text-sm">
+                    <div
+                      className="w-3 h-3 rounded-full"
+                      style={{ backgroundColor: COLORS[index % COLORS.length] }}
+                    />
+                    <span className="text-muted-foreground">{entry.name}</span>
+                    <span className="font-medium">{entry.value}</span>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+      )}
 
-      {/* Recent Assets & Departments */}
+      {/* Recent & Departments */}
       <motion.div variants={item} className="grid gap-4 md:grid-cols-2">
-        {/* Recent Assets */}
         <Card>
           <CardHeader>
             <CardTitle className="text-lg">Activos Recientes</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              {data.recentAssets.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-4">
-                  No hay activos registrados
-                </p>
-              ) : (
-                data.recentAssets.map((asset) => (
+            {recentAssets.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-4">
+                No hay activos registrados
+              </p>
+            ) : (
+              <div className="space-y-4">
+                {recentAssets.map((asset) => (
                   <div
                     key={asset.id}
-                    className="flex items-center justify-between p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors"
+                    className="flex items-center justify-between p-3 rounded-lg bg-muted/30"
                   >
                     <div className="flex items-center gap-3">
                       <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-primary/10">
@@ -327,33 +305,32 @@ export default function DashboardPage() {
                       <div>
                         <p className="font-medium text-sm">{asset.name}</p>
                         <p className="text-xs text-muted-foreground">
-                          {asset.id} • {asset.category.name}
+                          {asset.category.name}
                         </p>
                       </div>
                     </div>
-                    <Badge variant={statusColors[asset.status] as any}>
-                      {statusLabels[asset.status]}
+                    <Badge variant="outline">
+                      {statusLabels[asset.status] || asset.status}
                     </Badge>
                   </div>
-                ))
-              )}
-            </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
 
-        {/* Departments */}
         <Card>
           <CardHeader>
             <CardTitle className="text-lg">Departamentos</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              {data.departmentStats.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-4">
-                  No hay departamentos registrados
-                </p>
-              ) : (
-                data.departmentStats.map((dept, index) => (
+            {departmentStats.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-4">
+                No hay departamentos registrados
+              </p>
+            ) : (
+              <div className="space-y-4">
+                {departmentStats.map((dept, index) => (
                   <div
                     key={index}
                     className="flex items-center justify-between p-3 rounded-lg bg-muted/30"
@@ -369,15 +346,13 @@ export default function DashboardPage() {
                         </p>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <p className="font-medium text-sm">
-                        {formatCurrency(dept.assetValue)}
-                      </p>
-                    </div>
+                    <p className="font-medium text-sm">
+                      {formatCurrency(dept.assetValue)}
+                    </p>
                   </div>
-                ))
-              )}
-            </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
       </motion.div>
@@ -391,8 +366,8 @@ export default function DashboardPage() {
                 <Users className="h-6 w-6 text-primary" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{data.stats.totalUsers}</p>
-                <p className="text-sm text-muted-foreground">Usuarios totales</p>
+                <p className="text-2xl font-bold">{stats.totalUsers}</p>
+                <p className="text-sm text-muted-foreground">Usuarios</p>
               </div>
             </div>
           </CardContent>
@@ -404,8 +379,8 @@ export default function DashboardPage() {
                 <CheckCircle className="h-6 w-6 text-emerald-500" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{data.stats.availableAssets}</p>
-                <p className="text-sm text-muted-foreground">Activos disponibles</p>
+                <p className="text-2xl font-bold">{stats.availableAssets}</p>
+                <p className="text-sm text-muted-foreground">Disponibles</p>
               </div>
             </div>
           </CardContent>
@@ -417,9 +392,7 @@ export default function DashboardPage() {
                 <Building2 className="h-6 w-6 text-amber-500" />
               </div>
               <div>
-                <p className="text-2xl font-bold">
-                  {data.departmentStats.length}
-                </p>
+                <p className="text-2xl font-bold">{departmentStats.length}</p>
                 <p className="text-sm text-muted-foreground">Departamentos</p>
               </div>
             </div>
