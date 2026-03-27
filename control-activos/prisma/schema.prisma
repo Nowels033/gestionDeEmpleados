@@ -1,0 +1,329 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// USUARIOS Y AUTENTICACIÓN
+// ============================================
+
+model User {
+  id              String    @id @default(cuid())
+  email           String    @unique
+  password        String
+  name            String
+  lastName        String
+  phone           String?
+  photo           String?
+  employeeNumber  String    @unique
+  position        String
+  hireDate        DateTime
+  role            Role      @default(USER)
+  isActive        Boolean   @default(true)
+  signature       String?
+
+  departmentId    String
+  department      Department @relation(fields: [departmentId], references: [id])
+
+  documents       Document[]
+  assignments     Assignment[]
+  securityAssets  Asset[]      @relation("SecurityResponsible")
+  auditLogs       AuditLog[]
+  maintenanceLogs MaintenanceLog[] @relation("MaintenanceTechnician")
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@map("users")
+}
+
+model Document {
+  id          String   @id @default(cuid())
+  name        String
+  type        DocType
+  fileUrl     String
+  fileSize    Int
+  mimeType    String
+  uploadedAt  DateTime @default(now())
+
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("documents")
+}
+
+enum DocType {
+  INE
+  CONTRATO
+  DOMICILIO
+  LICENCIA
+  CV
+  CERTIFICADO
+  OTRO
+}
+
+enum Role {
+  ADMIN
+  EDITOR
+  USER
+}
+
+// ============================================
+// DEPARTAMENTOS
+// ============================================
+
+model Department {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  location    String?
+  managerId   String?
+  isActive    Boolean  @default(true)
+
+  users       User[]
+  assignments Assignment[]
+  contracts   Contract[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("departments")
+}
+
+// ============================================
+// CATEGORÍAS Y ACTIVOS
+// ============================================
+
+model Category {
+  id          String    @id @default(cuid())
+  name        String
+  description String?
+  icon        String?
+  photo       String?
+  parentId    String?
+  parent      Category? @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  children    Category[] @relation("CategoryHierarchy")
+  assets      Asset[]
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@map("categories")
+}
+
+model Asset {
+  id              String    @id @default(cuid())
+  name            String
+  description     String?
+  serialNumber    String?   @unique
+  brand           String?
+  model           String?
+  purchaseDate    DateTime?
+  purchasePrice   Float?
+  currentValue    Float?
+  status          AssetStatus @default(AVAILABLE)
+  location        String?
+  notes           String?
+  qrCode          String?   @unique
+  ensLevel        EnsLevel  @default(BASIC)
+
+  // Fotos del activo
+  photos          AssetPhoto[]
+
+  categoryId      String
+  category        Category  @relation(fields: [categoryId], references: [id])
+
+  securityUserId  String
+  securityUser    User      @relation("SecurityResponsible", fields: [securityUserId], references: [id])
+
+  assignments     Assignment[]
+  maintenanceLogs MaintenanceLog[]
+  contracts       Contract[]
+  auditLogs       AuditLog[]
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@map("assets")
+}
+
+model AssetPhoto {
+  id          String   @id @default(cuid())
+  url         String
+  isPrimary   Boolean  @default(false)
+  caption     String?
+  uploadedAt  DateTime @default(now())
+
+  assetId     String
+  asset       Asset    @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@map("asset_photos")
+}
+
+enum AssetStatus {
+  AVAILABLE
+  ASSIGNED
+  MAINTENANCE
+  RETIRED
+}
+
+enum EnsLevel {
+  BASIC
+  MEDIUM
+  HIGH
+}
+
+// ============================================
+// ASIGNACIONES
+// ============================================
+
+model Assignment {
+  id            String      @id @default(cuid())
+  type          AssignType
+  status        AssignStatus @default(ACTIVE)
+  assignedAt    DateTime    @default(now())
+  returnedAt    DateTime?
+  notes         String?
+  signatureUrl  String?
+
+  assetId       String
+  asset         Asset       @relation(fields: [assetId], references: [id])
+
+  userId        String?
+  user          User?       @relation(fields: [userId], references: [id])
+
+  departmentId  String?
+  department    Department? @relation(fields: [departmentId], references: [id])
+
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@map("assignments")
+}
+
+enum AssignType {
+  PERSONAL
+  DEPARTAMENTAL
+}
+
+enum AssignStatus {
+  ACTIVE
+  RETURNED
+  TRANSFERRED
+}
+
+// ============================================
+// MANTENIMIENTO
+// ============================================
+
+model MaintenanceLog {
+  id              String          @id @default(cuid())
+  type            MaintenanceType
+  description     String
+  cost            Float?
+  status          MaintenanceStatus @default(PENDING)
+  scheduledDate   DateTime
+  completedDate   DateTime?
+  notes           String?
+
+  assetId         String
+  asset           Asset           @relation(fields: [assetId], references: [id])
+
+  technicianId    String?
+  technician      User?           @relation("MaintenanceTechnician", fields: [technicianId], references: [id])
+
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  @@map("maintenance_logs")
+}
+
+enum MaintenanceType {
+  PREVENTIVE
+  CORRECTIVE
+  EMERGENCY
+}
+
+enum MaintenanceStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+// ============================================
+// CONTRATOS Y LICENCIAS
+// ============================================
+
+model Contract {
+  id              String        @id @default(cuid())
+  name            String
+  type            ContractType
+  provider        String
+  startDate       DateTime
+  endDate         DateTime
+  value           Float?
+  status          ContractStatus @default(ACTIVE)
+  notes           String?
+  documentUrl     String?
+
+  assetId         String?
+  asset           Asset?        @relation(fields: [assetId], references: [id])
+
+  departmentId    String?
+  department      Department?   @relation(fields: [departmentId], references: [id])
+
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@map("contracts")
+}
+
+enum ContractType {
+  SERVICE
+  WARRANTY
+  INSURANCE
+  LEASE
+  LICENSE
+  MAINTENANCE
+}
+
+enum ContractStatus {
+  ACTIVE
+  EXPIRED
+  CANCELLED
+  RENEWED
+}
+
+// ============================================
+// AUDITORÍA
+// ============================================
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  action      String
+  entity      String
+  entityId    String
+  oldValue    String?
+  newValue    String?
+  ipAddress   String?
+  userAgent   String?
+  description String
+
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+
+  assetId     String?
+  asset       Asset?   @relation(fields: [assetId], references: [id])
+
+  createdAt   DateTime @default(now())
+
+  @@map("audit_logs")
+}
