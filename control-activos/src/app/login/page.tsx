@@ -25,7 +25,7 @@ export default function LoginPage() {
     // Simulación de login
     setTimeout(() => {
       if (email && password) {
-        router.push("/dashboard");
+        router.push("/");
       } else {
         setError("Por favor ingresa tus credenciales");
       }

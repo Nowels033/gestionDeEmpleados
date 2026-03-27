@@ -1,5 +1,22 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { z } from "zod";
+
+const createAssetSchema = z.object({
+  name: z.string().trim().min(1, "El nombre es requerido"),
+  description: z.string().trim().optional(),
+  serialNumber: z.string().trim().optional(),
+  brand: z.string().trim().optional(),
+  model: z.string().trim().optional(),
+  purchaseDate: z.coerce.date().optional(),
+  purchasePrice: z.coerce.number().nonnegative().optional(),
+  currentValue: z.coerce.number().nonnegative().optional(),
+  location: z.string().trim().optional(),
+  qrCode: z.string().trim().optional(),
+  ensLevel: z.enum(["BASIC", "MEDIUM", "HIGH"]).default("BASIC"),
+  categoryId: z.string().trim().min(1, "La categoria es requerida"),
+  securityUserId: z.string().trim().min(1, "El responsable de seguridad es requerido"),
+});
 
 export async function GET() {
   try {
@@ -47,7 +64,8 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
+    const rawBody = await request.json();
+    const body = createAssetSchema.parse(rawBody);
 
     const asset = await prisma.asset.create({
       data: {
@@ -56,9 +74,9 @@ export async function POST(request: Request) {
         serialNumber: body.serialNumber,
         brand: body.brand,
         model: body.model,
-        purchaseDate: body.purchaseDate ? new Date(body.purchaseDate) : null,
-        purchasePrice: body.purchasePrice ? parseFloat(body.purchasePrice) : null,
-        currentValue: body.currentValue ? parseFloat(body.currentValue) : null,
+        purchaseDate: body.purchaseDate ?? null,
+        purchasePrice: body.purchasePrice ?? null,
+        currentValue: body.currentValue ?? null,
         location: body.location,
         qrCode: body.qrCode,
         ensLevel: body.ensLevel || "BASIC",
@@ -73,6 +91,31 @@ export async function POST(request: Request) {
 
     return NextResponse.json(asset, { status: 201 });
   } catch (error) {
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        {
+          error: "Datos invalidos",
+          details: error.issues.map((issue) => ({
+            field: issue.path.join("."),
+            message: issue.message,
+          })),
+        },
+        { status: 400 }
+      );
+    }
+
+    if (
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      error.code === "P2002"
+    ) {
+      return NextResponse.json(
+        { error: "El numero de serie o codigo QR ya existe" },
+        { status: 409 }
+      );
+    }
+
     console.error("Error creating asset:", error);
     return NextResponse.json(
       { error: "Error al crear activo" },

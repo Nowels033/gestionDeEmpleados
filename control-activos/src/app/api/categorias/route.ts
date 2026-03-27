@@ -1,5 +1,13 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { z } from "zod";
+
+const createCategorySchema = z.object({
+  name: z.string().trim().min(1, "El nombre es requerido"),
+  description: z.string().trim().optional(),
+  icon: z.string().trim().optional(),
+  parentId: z.string().trim().optional(),
+});
 
 export async function GET() {
   try {
@@ -26,7 +34,8 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
+    const rawBody = await request.json();
+    const body = createCategorySchema.parse(rawBody);
 
     const category = await prisma.category.create({
       data: {
@@ -39,6 +48,19 @@ export async function POST(request: Request) {
 
     return NextResponse.json(category, { status: 201 });
   } catch (error) {
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        {
+          error: "Datos invalidos",
+          details: error.issues.map((issue) => ({
+            field: issue.path.join("."),
+            message: issue.message,
+          })),
+        },
+        { status: 400 }
+      );
+    }
+
     console.error("Error creating category:", error);
     return NextResponse.json(
       { error: "Error al crear categoría" },

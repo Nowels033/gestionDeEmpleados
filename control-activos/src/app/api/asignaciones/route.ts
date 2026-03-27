@@ -1,5 +1,32 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { z } from "zod";
+
+const createAssignmentSchema = z
+  .object({
+    type: z.enum(["PERSONAL", "DEPARTAMENTAL"]),
+    assetId: z.string().trim().min(1, "El activo es requerido"),
+    userId: z.string().trim().optional(),
+    departmentId: z.string().trim().optional(),
+    notes: z.string().trim().optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.type === "PERSONAL" && !data.userId) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["userId"],
+        message: "Debes seleccionar un usuario para asignacion personal",
+      });
+    }
+
+    if (data.type === "DEPARTAMENTAL" && !data.departmentId) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["departmentId"],
+        message: "Debes seleccionar un departamento para asignacion departamental",
+      });
+    }
+  });
 
 export async function GET() {
   try {
@@ -45,32 +72,64 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
+    const rawBody = await request.json();
+    const body = createAssignmentSchema.parse(rawBody);
 
-    // Crear la asignación
-    const assignment = await prisma.assignment.create({
-      data: {
-        type: body.type,
-        assetId: body.assetId,
-        userId: body.userId || null,
-        departmentId: body.departmentId || null,
-        notes: body.notes,
-      },
-      include: {
-        asset: true,
-        user: true,
-        department: true,
-      },
+    const asset = await prisma.asset.findUnique({
+      where: { id: body.assetId },
+      select: { id: true, status: true },
     });
 
-    // Actualizar el estado del activo
-    await prisma.asset.update({
-      where: { id: body.assetId },
-      data: { status: "ASSIGNED" },
+    if (!asset) {
+      return NextResponse.json({ error: "Activo no encontrado" }, { status: 404 });
+    }
+
+    if (asset.status !== "AVAILABLE") {
+      return NextResponse.json(
+        { error: "Solo se pueden asignar activos disponibles" },
+        { status: 409 }
+      );
+    }
+
+    const assignment = await prisma.$transaction(async (tx) => {
+      const createdAssignment = await tx.assignment.create({
+        data: {
+          type: body.type,
+          assetId: body.assetId,
+          userId: body.userId || null,
+          departmentId: body.departmentId || null,
+          notes: body.notes,
+        },
+        include: {
+          asset: true,
+          user: true,
+          department: true,
+        },
+      });
+
+      await tx.asset.update({
+        where: { id: body.assetId },
+        data: { status: "ASSIGNED" },
+      });
+
+      return createdAssignment;
     });
 
     return NextResponse.json(assignment, { status: 201 });
   } catch (error) {
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        {
+          error: "Datos invalidos",
+          details: error.issues.map((issue) => ({
+            field: issue.path.join("."),
+            message: issue.message,
+          })),
+        },
+        { status: 400 }
+      );
+    }
+
     console.error("Error creating assignment:", error);
     return NextResponse.json(
       { error: "Error al crear asignación" },
