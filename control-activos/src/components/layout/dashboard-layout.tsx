@@ -38,16 +38,16 @@ import {
 import { Separator } from "@/components/ui/separator";
 
 const navItems = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/dashboard/activos", label: "Activos", icon: Package },
-  { href: "/dashboard/categorias", label: "Categorías", icon: FolderTree },
-  { href: "/dashboard/departamentos", label: "Departamentos", icon: Building2 },
-  { href: "/dashboard/usuarios", label: "Usuarios", icon: Users },
-  { href: "/dashboard/asignaciones", label: "Asignaciones", icon: ArrowLeftRight },
-  { href: "/dashboard/mantenimiento", label: "Mantenimiento", icon: Wrench },
-  { href: "/dashboard/contratos", label: "Contratos", icon: FileText },
-  { href: "/dashboard/reportes", label: "Reportes PDF", icon: FileDown },
-  { href: "/dashboard/chat", label: "Chat IA", icon: Bot },
+  { href: "/", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/activos", label: "Activos", icon: Package },
+  { href: "/categorias", label: "Categorías", icon: FolderTree },
+  { href: "/departamentos", label: "Departamentos", icon: Building2 },
+  { href: "/usuarios", label: "Usuarios", icon: Users },
+  { href: "/asignaciones", label: "Asignaciones", icon: ArrowLeftRight },
+  { href: "/mantenimiento", label: "Mantenimiento", icon: Wrench },
+  { href: "/contratos", label: "Contratos", icon: FileText },
+  { href: "/reportes", label: "Reportes PDF", icon: FileDown },
+  { href: "/chat", label: "Chat IA", icon: Bot },
 ];
 
 interface DashboardLayoutProps {
@@ -138,11 +138,11 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
           <div className="px-3 pb-3">
             <Separator className="mb-3" />
             <Link
-              href="/dashboard/configuracion"
+              href="/configuracion"
               onClick={() => setSidebarOpen(false)}
               className={cn(
                 "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200",
-                pathname === "/dashboard/configuracion"
+                pathname === "/configuracion"
                   ? "bg-primary text-primary-foreground shadow-md"
                   : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
               )}
