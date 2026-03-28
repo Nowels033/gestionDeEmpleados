@@ -51,6 +51,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useFetch } from "@/lib/hooks/use-fetch";
 import { downloadCsv } from "@/lib/csv";
+import { APP_COMMAND_EVENT, consumePendingAppCommand } from "@/lib/command-bus";
 import { formatCurrency } from "@/lib/utils";
 import toast from "react-hot-toast";
 
@@ -160,6 +161,45 @@ export default function ContratosPage() {
     assetId: "",
     departmentId: "",
   });
+
+  const executeQuickCommand = React.useCallback((command: string) => {
+    if (command === "new-contract") {
+      setFormData({
+        name: "",
+        type: "SERVICE",
+        provider: "",
+        startDate: "",
+        endDate: "",
+        value: "",
+        notes: "",
+        assetId: "",
+        departmentId: "",
+      });
+      setDialogOpen(true);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    const onCommand = (event: Event) => {
+      const detail = (event as CustomEvent<{ command?: string }>).detail;
+      if (!detail?.command) {
+        return;
+      }
+
+      executeQuickCommand(detail.command);
+    };
+
+    window.addEventListener(APP_COMMAND_EVENT, onCommand as EventListener);
+
+    const pendingCommand = consumePendingAppCommand();
+    if (pendingCommand) {
+      executeQuickCommand(pendingCommand);
+    }
+
+    return () => {
+      window.removeEventListener(APP_COMMAND_EVENT, onCommand as EventListener);
+    };
+  }, [executeQuickCommand]);
 
   const contractsWithExpiry = React.useMemo(() => {
     return contracts.map((contract) => {

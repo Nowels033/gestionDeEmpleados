@@ -52,6 +52,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useFetch } from "@/lib/hooks/use-fetch";
 import { downloadCsv } from "@/lib/csv";
+import { APP_COMMAND_EVENT, consumePendingAppCommand } from "@/lib/command-bus";
 import toast from "react-hot-toast";
 
 interface Assignment {
@@ -223,7 +224,7 @@ export default function AsignacionesPage() {
     });
   };
 
-  const resetForm = () => {
+  const resetForm = React.useCallback(() => {
     setFormData({
       type: "PERSONAL",
       assetId: "",
@@ -231,7 +232,7 @@ export default function AsignacionesPage() {
       departmentId: "",
       notes: "",
     });
-  };
+  }, []);
 
   const handleCreateAssignment = async () => {
     if (!formData.assetId) {
@@ -555,6 +556,38 @@ export default function AsignacionesPage() {
     );
     toast.success("CSV exportado correctamente");
   };
+
+  const executeQuickCommand = React.useCallback(
+    (command: string) => {
+      if (command === "new-assignment") {
+        resetForm();
+        setDialogOpen(true);
+      }
+    },
+    [resetForm]
+  );
+
+  React.useEffect(() => {
+    const onCommand = (event: Event) => {
+      const detail = (event as CustomEvent<{ command?: string }>).detail;
+      if (!detail?.command) {
+        return;
+      }
+
+      executeQuickCommand(detail.command);
+    };
+
+    window.addEventListener(APP_COMMAND_EVENT, onCommand as EventListener);
+
+    const pendingCommand = consumePendingAppCommand();
+    if (pendingCommand) {
+      executeQuickCommand(pendingCommand);
+    }
+
+    return () => {
+      window.removeEventListener(APP_COMMAND_EVENT, onCommand as EventListener);
+    };
+  }, [executeQuickCommand]);
 
   React.useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {

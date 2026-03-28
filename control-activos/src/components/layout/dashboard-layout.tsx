@@ -9,7 +9,9 @@ import {
   ArrowLeftRight,
   Bot,
   Building2,
+  Command,
   ChevronRight,
+  Download,
   FileDown,
   FileText,
   FolderTree,
@@ -18,15 +20,23 @@ import {
   Menu,
   Moon,
   Package,
+  Plus,
   Search,
   Settings,
   Sun,
+  UserPlus,
   Users,
   Wrench,
   X,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { useTheme } from "next-themes";
 import { BRAND_NAME } from "@/lib/brand";
+import {
+  dispatchAppCommand,
+  setPendingAppCommand,
+  type AppCommand,
+} from "@/lib/command-bus";
 import { cn } from "@/lib/utils";
 import { AssetOneLogo } from "@/components/layout/assetone-logo";
 import { Button } from "@/components/ui/button";
@@ -62,6 +72,18 @@ const navItems = [
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
+}
+
+interface CommandItem {
+  id: string;
+  label: string;
+  description: string;
+  icon: LucideIcon;
+  group: "Modulo" | "Accion";
+  href?: string;
+  command?: AppCommand;
+  action?: "toggle-theme";
+  keywords: string;
 }
 
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
@@ -121,35 +143,141 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     }
   }, [searchOpen]);
 
-  const filteredNavItems = React.useMemo(() => {
-    const normalized = searchQuery.trim().toLowerCase();
-    if (!normalized) {
-      return navItems;
-    }
-
-    return navItems.filter(
-      (item) =>
-        item.label.toLowerCase().includes(normalized) ||
-        item.href.toLowerCase().includes(normalized)
-    );
-  }, [searchQuery]);
-
-  React.useEffect(() => {
-    if (filteredNavItems.length === 0) {
-      setActiveSearchIndex(0);
-      return;
-    }
-
-    setActiveSearchIndex((current) =>
-      Math.min(Math.max(current, 0), filteredNavItems.length - 1)
-    );
-  }, [filteredNavItems]);
-
   const handleNavigate = (href: string) => {
     setSearchOpen(false);
     setSearchQuery("");
     setActiveSearchIndex(0);
     router.push(href);
+  };
+
+  const commandItems = React.useMemo<CommandItem[]>(
+    () => [
+      ...navItems.map((item) => ({
+        id: `module-${item.href}`,
+        label: item.label,
+        description: `Abrir modulo ${item.label.toLowerCase()}`,
+        icon: item.icon,
+        group: "Modulo" as const,
+        href: item.href,
+        keywords: `${item.label} ${item.href} panel seccion modulo`,
+      })),
+      {
+        id: "action-new-asset",
+        label: "Nuevo activo",
+        description: "Crear un activo desde Command Center",
+        icon: Plus,
+        group: "Accion",
+        href: "/activos",
+        command: "new-asset",
+        keywords: "crear activo inventario alta",
+      },
+      {
+        id: "action-new-assignment",
+        label: "Nueva asignacion",
+        description: "Registrar una asignacion rapidamente",
+        icon: ArrowLeftRight,
+        group: "Accion",
+        href: "/asignaciones",
+        command: "new-assignment",
+        keywords: "asignar activo usuario departamento",
+      },
+      {
+        id: "action-new-user",
+        label: "Nuevo usuario",
+        description: "Registrar un usuario en segundos",
+        icon: UserPlus,
+        group: "Accion",
+        href: "/usuarios",
+        command: "new-user",
+        keywords: "crear usuario empleado persona",
+      },
+      {
+        id: "action-new-contract",
+        label: "Nuevo contrato",
+        description: "Registrar un contrato rapidamente",
+        icon: FileText,
+        group: "Accion",
+        href: "/contratos",
+        command: "new-contract",
+        keywords: "crear contrato proveedor servicio",
+      },
+      {
+        id: "action-export-assets",
+        label: "Exportar activos CSV",
+        description: "Generar export de activos actual",
+        icon: Download,
+        group: "Accion",
+        href: "/activos",
+        command: "export-assets",
+        keywords: "exportar csv activos descargar",
+      },
+      {
+        id: "action-toggle-theme",
+        label: theme === "dark" ? "Cambiar a tema claro" : "Cambiar a tema oscuro",
+        description: "Alternar apariencia del sistema",
+        icon: Command,
+        group: "Accion",
+        action: "toggle-theme",
+        keywords: "tema apariencia claro oscuro",
+      },
+    ],
+    [theme]
+  );
+
+  const filteredCommandItems = React.useMemo(() => {
+    const normalized = searchQuery.trim().toLowerCase();
+    if (!normalized) {
+      return commandItems;
+    }
+
+    return commandItems.filter((item) =>
+      [item.label, item.description, item.keywords, item.href]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase()
+        .includes(normalized)
+    );
+  }, [searchQuery, commandItems]);
+
+  React.useEffect(() => {
+    if (filteredCommandItems.length === 0) {
+      setActiveSearchIndex(0);
+      return;
+    }
+
+    setActiveSearchIndex((current) =>
+      Math.min(Math.max(current, 0), filteredCommandItems.length - 1)
+    );
+  }, [filteredCommandItems]);
+
+  const executeCommand = (item: CommandItem) => {
+    const closeCommandCenter = () => {
+      setSearchOpen(false);
+      setSearchQuery("");
+      setActiveSearchIndex(0);
+    };
+
+    if (item.action === "toggle-theme") {
+      closeCommandCenter();
+      setTheme(theme === "dark" ? "light" : "dark");
+      return;
+    }
+
+    if (!item.href) {
+      return;
+    }
+
+    if (item.command) {
+      if (pathname === item.href) {
+        closeCommandCenter();
+        dispatchAppCommand(item.command);
+        return;
+      } else {
+        setPendingAppCommand(item.command);
+      }
+    }
+
+    handleNavigate(item.href);
   };
 
   return (
@@ -264,7 +392,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
               aria-controls="global-search-dialog"
             >
               <Search className="h-4 w-4" />
-              <span className="flex-1">Buscar modulo...</span>
+              <span className="flex-1">Buscar modulo o accion...</span>
               <kbd className="pointer-events-none inline-flex h-5 select-none items-center gap-1 rounded border border-border bg-secondary px-1.5 font-mono text-[10px] font-medium text-muted-foreground">
                 <span className="text-xs">⌘</span>K
               </kbd>
@@ -364,8 +492,10 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       <Dialog open={searchOpen} onOpenChange={setSearchOpen}>
         <DialogContent id="global-search-dialog" className="sm:max-w-[560px]">
           <DialogHeader>
-            <DialogTitle>Buscador global</DialogTitle>
-            <DialogDescription>Encuentra cualquier modulo del panel en segundos.</DialogDescription>
+            <DialogTitle>Command Center</DialogTitle>
+            <DialogDescription>
+              Navega modulos y ejecuta acciones globales sin salir del teclado.
+            </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-3">
@@ -379,9 +509,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                   if (event.key === "ArrowDown") {
                     event.preventDefault();
                     setActiveSearchIndex((current) =>
-                      filteredNavItems.length === 0
+                      filteredCommandItems.length === 0
                         ? 0
-                        : Math.min(current + 1, filteredNavItems.length - 1)
+                        : Math.min(current + 1, filteredCommandItems.length - 1)
                     );
                   }
 
@@ -392,27 +522,27 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
                   if (event.key === "Enter") {
                     event.preventDefault();
-                    const selectedItem = filteredNavItems[activeSearchIndex];
+                    const selectedItem = filteredCommandItems[activeSearchIndex];
                     if (selectedItem) {
-                      handleNavigate(selectedItem.href);
+                      executeCommand(selectedItem);
                     }
                   }
                 }}
-                placeholder="Escribe: activos, usuarios, reportes..."
+                placeholder="Escribe: activos, nuevo usuario, exportar..."
                 className="flex h-11 w-full rounded-lg border border-input bg-card px-10 py-2 text-sm text-foreground outline-none transition-all duration-200 ease-in-out placeholder:text-muted-foreground focus:border-primary/60 focus:ring-2 focus:ring-ring/35"
               />
             </div>
 
             <div className="max-h-72 overflow-y-auto rounded-lg border border-border scrollbar-thin">
-              {filteredNavItems.length === 0 ? (
-                <p className="p-4 text-sm text-muted-foreground">No se encontraron modulos.</p>
+              {filteredCommandItems.length === 0 ? (
+                <p className="p-4 text-sm text-muted-foreground">No se encontraron resultados.</p>
               ) : (
-                <ul role="listbox" aria-label="Resultados de modulos" className="divide-y divide-border">
-                  {filteredNavItems.map((item, index) => (
-                    <li key={item.href}>
+                <ul role="listbox" aria-label="Resultados del Command Center" className="divide-y divide-border">
+                  {filteredCommandItems.map((item, index) => (
+                    <li key={item.id}>
                       <button
                         type="button"
-                        onClick={() => handleNavigate(item.href)}
+                        onClick={() => executeCommand(item)}
                         onMouseEnter={() => setActiveSearchIndex(index)}
                         role="option"
                         aria-selected={activeSearchIndex === index}
@@ -422,13 +552,36 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                         )}
                       >
                         <item.icon className="h-4 w-4 text-muted-foreground" />
-                        <span className="font-medium tracking-[0.01em] text-foreground">{item.label}</span>
-                        <span className="ml-auto text-xs text-muted-foreground">{item.href}</span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate font-medium tracking-[0.01em] text-foreground">
+                            {item.label}
+                          </span>
+                          <span className="block truncate text-xs text-muted-foreground">
+                            {item.description}
+                          </span>
+                        </span>
+                        <span
+                          className={cn(
+                            "rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.08em]",
+                            item.group === "Accion"
+                              ? "border-primary/35 bg-primary/10 text-primary"
+                              : "border-border bg-secondary text-muted-foreground"
+                          )}
+                        >
+                          {item.group}
+                        </span>
                       </button>
                     </li>
                   ))}
                 </ul>
               )}
+            </div>
+
+            <div className="flex items-center justify-between rounded-lg border border-border bg-secondary/55 px-3 py-2 text-[11px] text-muted-foreground">
+              <span>Usa ↑ ↓ para moverte y Enter para ejecutar</span>
+              <kbd className="inline-flex h-5 items-center rounded border border-border bg-card px-1.5 font-mono text-[10px]">
+                esc
+              </kbd>
             </div>
           </div>
         </DialogContent>
