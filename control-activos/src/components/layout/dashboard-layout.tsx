@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { signOut } from "next-auth/react";
 import {
   LayoutDashboard,
@@ -71,6 +71,8 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const [mounted, setMounted] = React.useState(false);
   const [searchOpen, setSearchOpen] = React.useState(false);
   const [searchQuery, setSearchQuery] = React.useState("");
+  const [activeSearchIndex, setActiveSearchIndex] = React.useState(0);
+  const prefersReducedMotion = useReducedMotion();
 
   const currentSection = React.useMemo(() => {
     const activeItem = navItems.find((item) => item.href === pathname);
@@ -125,18 +127,44 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const handleNavigate = (href: string) => {
     setSearchOpen(false);
     setSearchQuery("");
+    setActiveSearchIndex(0);
     router.push(href);
   };
 
+  React.useEffect(() => {
+    if (!searchOpen) {
+      setSearchQuery("");
+      setActiveSearchIndex(0);
+    }
+  }, [searchOpen]);
+
+  React.useEffect(() => {
+    if (filteredNavItems.length === 0) {
+      setActiveSearchIndex(0);
+      return;
+    }
+
+    setActiveSearchIndex((current) =>
+      Math.min(Math.max(current, 0), filteredNavItems.length - 1)
+    );
+  }, [filteredNavItems]);
+
   return (
     <div className="min-h-screen bg-background">
+      <a
+        href="#main-content"
+        className="sr-only fixed left-4 top-4 z-[90] rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground focus:not-sr-only"
+      >
+        Saltar al contenido principal
+      </a>
+
       {/* Mobile sidebar backdrop */}
       <AnimatePresence>
         {sidebarOpen && (
           <motion.div
-            initial={{ opacity: 0 }}
+            initial={prefersReducedMotion ? { opacity: 1 } : { opacity: 0 }}
             animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
+            exit={prefersReducedMotion ? { opacity: 1 } : { opacity: 0 }}
             className="fixed inset-0 z-40 bg-black/35 backdrop-blur-sm lg:hidden"
             onClick={() => setSidebarOpen(false)}
           />
@@ -146,7 +174,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       {/* Sidebar */}
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-50 w-72 bg-sidebar/95 border-r border-border/70 backdrop-blur-md transform transition-transform duration-300 ease-in-out lg:translate-x-0",
+          "fixed inset-y-0 left-0 z-50 w-72 bg-sidebar/95 border-r border-border/70 backdrop-blur-md transform transition-transform duration-300 ease-in-out motion-reduce:transition-none lg:translate-x-0",
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
@@ -167,6 +195,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
               size="icon"
               className="lg:hidden"
               onClick={() => setSidebarOpen(false)}
+              aria-label="Cerrar menu lateral"
             >
               <X className="h-5 w-5" />
             </Button>
@@ -228,6 +257,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
               size="icon"
               className="lg:hidden"
               onClick={() => setSidebarOpen(true)}
+              aria-label="Abrir menu lateral"
             >
               <Menu className="h-5 w-5" />
             </Button>
@@ -237,6 +267,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
               type="button"
               className="hidden sm:flex items-center gap-2 px-4 py-2 rounded-lg bg-muted/60 text-muted-foreground text-sm w-64 text-left transition-colors hover:bg-muted"
               onClick={() => setSearchOpen(true)}
+              aria-haspopup="dialog"
+              aria-expanded={searchOpen}
+              aria-controls="global-search-dialog"
             >
               <Search className="h-4 w-4" />
               <span className="flex-1">Buscar modulo...</span>
@@ -258,6 +291,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                 size="icon"
                 onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
                 className="rounded-lg"
+                aria-label={theme === "dark" ? "Cambiar a tema claro" : "Cambiar a tema oscuro"}
               >
                 <Sun className="h-5 w-5 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
                 <Moon className="absolute h-5 w-5 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
@@ -266,7 +300,12 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             )}
 
             {/* Notifications */}
-            <Button variant="ghost" size="icon" className="rounded-lg relative">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="rounded-lg relative"
+              aria-label="Abrir notificaciones"
+            >
               <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-destructive text-[10px] font-medium text-white flex items-center justify-center">
                 3
               </span>
@@ -289,7 +328,11 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             {/* User menu */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="relative h-10 w-10 rounded-full">
+                <Button
+                  variant="ghost"
+                  className="relative h-10 w-10 rounded-full"
+                  aria-label="Abrir menu de usuario"
+                >
                   <Avatar className="h-10 w-10">
                     <AvatarImage src="" alt="Avatar" />
                     <AvatarFallback className="bg-primary text-primary-foreground">
@@ -330,13 +373,13 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         </header>
 
         {/* Page content */}
-        <main className="p-4 lg:p-8">
+        <main id="main-content" className="p-4 lg:p-8">
           <div className="app-surface p-4 lg:p-6">{children}</div>
         </main>
       </div>
 
       <Dialog open={searchOpen} onOpenChange={setSearchOpen}>
-        <DialogContent className="sm:max-w-[560px]">
+        <DialogContent id="global-search-dialog" className="sm:max-w-[560px]">
           <DialogHeader>
             <DialogTitle>Buscador global</DialogTitle>
             <DialogDescription>Encuentra y abre cualquier modulo rapido.</DialogDescription>
@@ -348,6 +391,29 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                 autoFocus
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "ArrowDown") {
+                    event.preventDefault();
+                    setActiveSearchIndex((current) =>
+                      filteredNavItems.length === 0
+                        ? 0
+                        : Math.min(current + 1, filteredNavItems.length - 1)
+                    );
+                  }
+
+                  if (event.key === "ArrowUp") {
+                    event.preventDefault();
+                    setActiveSearchIndex((current) => Math.max(current - 1, 0));
+                  }
+
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    const selectedItem = filteredNavItems[activeSearchIndex];
+                    if (selectedItem) {
+                      handleNavigate(selectedItem.href);
+                    }
+                  }
+                }}
                 placeholder="Escribe: activos, usuarios, reportes..."
                 className="flex h-11 w-full rounded-lg border border-input bg-background px-10 py-2 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               />
@@ -356,13 +422,19 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
               {filteredNavItems.length === 0 ? (
                 <p className="p-4 text-sm text-muted-foreground">No se encontraron modulos.</p>
               ) : (
-                <ul className="divide-y divide-border/60">
-                  {filteredNavItems.map((item) => (
+                <ul className="divide-y divide-border/60" role="listbox" aria-label="Resultados de modulos">
+                  {filteredNavItems.map((item, index) => (
                     <li key={item.href}>
                       <button
                         type="button"
                         onClick={() => handleNavigate(item.href)}
-                        className="flex w-full items-center gap-3 p-3 text-left transition-colors hover:bg-muted/60"
+                        onMouseEnter={() => setActiveSearchIndex(index)}
+                        role="option"
+                        aria-selected={activeSearchIndex === index}
+                        className={cn(
+                          "flex w-full items-center gap-3 p-3 text-left transition-colors hover:bg-muted/60",
+                          activeSearchIndex === index && "bg-muted/60"
+                        )}
                       >
                         <item.icon className="h-4 w-4 text-primary" />
                         <span className="font-medium">{item.label}</span>
