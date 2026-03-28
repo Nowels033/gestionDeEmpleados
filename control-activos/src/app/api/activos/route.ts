@@ -83,6 +83,36 @@ export async function GET(request: Request) {
             lastName: true,
           },
         },
+        photos: {
+          select: {
+            id: true,
+            url: true,
+            isPrimary: true,
+            caption: true,
+            uploadedAt: true,
+          },
+          orderBy: [{ isPrimary: "desc" }, { uploadedAt: "desc" }],
+        },
+        assignments: {
+          where: { status: "ACTIVE" },
+          select: {
+            user: {
+              select: {
+                id: true,
+                name: true,
+                lastName: true,
+              },
+            },
+            department: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+          },
+          take: 1,
+          orderBy: { assignedAt: "desc" },
+        },
       },
       orderBy: { createdAt: "desc" },
     });
@@ -135,7 +165,31 @@ export async function POST(request: Request) {
       },
       include: {
         category: true,
-        securityUser: true,
+        securityUser: {
+          select: { id: true, name: true, lastName: true },
+        },
+        photos: {
+          select: {
+            id: true,
+            url: true,
+            isPrimary: true,
+            caption: true,
+            uploadedAt: true,
+          },
+        },
+        assignments: {
+          where: { status: "ACTIVE" },
+          select: {
+            user: {
+              select: { id: true, name: true, lastName: true },
+            },
+            department: {
+              select: { id: true, name: true },
+            },
+          },
+          take: 1,
+          orderBy: { assignedAt: "desc" },
+        },
       },
     });
 

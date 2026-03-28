@@ -89,6 +89,18 @@ export async function GET(request: Request) {
             documents: true,
           },
         },
+        documents: {
+          select: {
+            id: true,
+            name: true,
+            type: true,
+            fileUrl: true,
+            fileSize: true,
+            mimeType: true,
+            uploadedAt: true,
+          },
+          orderBy: { uploadedAt: "desc" },
+        },
       },
       orderBy: { createdAt: "desc" },
     });

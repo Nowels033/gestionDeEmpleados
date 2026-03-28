@@ -14,6 +14,7 @@ const updateUserSchema = z.object({
   hireDate: z.coerce.date().optional(),
   role: z.enum(["ADMIN", "EDITOR", "USER"]).optional(),
   isActive: z.boolean().optional(),
+  photo: z.string().trim().nullable().optional(),
   departmentId: z.string().trim().min(1).optional(),
   password: z.string().min(8).optional(),
 });
@@ -23,7 +24,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error } = await requireRoles(["ADMIN"]);
+    const { error } = await requireRoles(["ADMIN", "EDITOR"]);
     if (error) {
       return error;
     }
@@ -47,6 +48,18 @@ export async function PATCH(
             assignments: { where: { status: "ACTIVE" } },
             documents: true,
           },
+        },
+        documents: {
+          select: {
+            id: true,
+            name: true,
+            type: true,
+            fileUrl: true,
+            fileSize: true,
+            mimeType: true,
+            uploadedAt: true,
+          },
+          orderBy: { uploadedAt: "desc" },
         },
       },
     });

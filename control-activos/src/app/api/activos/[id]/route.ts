@@ -42,6 +42,29 @@ export async function PATCH(
         securityUser: {
           select: { id: true, name: true, lastName: true },
         },
+        photos: {
+          select: {
+            id: true,
+            url: true,
+            isPrimary: true,
+            caption: true,
+            uploadedAt: true,
+          },
+          orderBy: [{ isPrimary: "desc" }, { uploadedAt: "desc" }],
+        },
+        assignments: {
+          where: { status: "ACTIVE" },
+          select: {
+            user: {
+              select: { id: true, name: true, lastName: true },
+            },
+            department: {
+              select: { id: true, name: true },
+            },
+          },
+          take: 1,
+          orderBy: { assignedAt: "desc" },
+        },
       },
     });
 
