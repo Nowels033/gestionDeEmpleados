@@ -12,6 +12,7 @@ import {
   Calendar,
   FileDown,
   Eye,
+  Edit,
   MoreVertical,
   CheckCircle,
   XCircle,
@@ -22,6 +23,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Loading } from "@/components/ui/loading";
+import { ConfirmActionDialog } from "@/components/ui/confirm-action-dialog";
 import {
   Dialog,
   DialogContent,
@@ -116,6 +118,23 @@ export default function AsignacionesPage() {
   const [typeFilter, setTypeFilter] = React.useState("all");
   const [dialogOpen, setDialogOpen] = React.useState(false);
   const [submitting, setSubmitting] = React.useState(false);
+  const [returnDialogOpen, setReturnDialogOpen] = React.useState(false);
+  const [transferDialogOpen, setTransferDialogOpen] = React.useState(false);
+  const [editDialogOpen, setEditDialogOpen] = React.useState(false);
+  const [actionLoading, setActionLoading] = React.useState(false);
+  const [selectedAssignment, setSelectedAssignment] = React.useState<Assignment | null>(null);
+  const [editData, setEditData] = React.useState({
+    type: "PERSONAL" as "PERSONAL" | "DEPARTAMENTAL",
+    status: "ACTIVE" as "ACTIVE" | "RETURNED" | "TRANSFERRED",
+    userId: "",
+    departmentId: "",
+    notes: "",
+  });
+  const [transferData, setTransferData] = React.useState({
+    type: "PERSONAL" as "PERSONAL" | "DEPARTAMENTAL",
+    userId: "",
+    departmentId: "",
+  });
   const [formData, setFormData] = React.useState({
     type: "PERSONAL" as "PERSONAL" | "DEPARTAMENTAL",
     assetId: "",
@@ -209,6 +228,155 @@ export default function AsignacionesPage() {
       toast.error("No fue posible crear la asignacion");
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const openReturnDialog = (assignment: Assignment) => {
+    setSelectedAssignment(assignment);
+    setReturnDialogOpen(true);
+  };
+
+  const handleReturnAssignment = async () => {
+    if (!selectedAssignment) {
+      return;
+    }
+
+    try {
+      setActionLoading(true);
+      const response = await fetch(`/api/asignaciones/${selectedAssignment.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "RETURNED" }),
+      });
+
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        toast.error(body?.error ?? "No fue posible devolver la asignacion");
+        return;
+      }
+
+      toast.success("Asignacion devuelta correctamente");
+      setReturnDialogOpen(false);
+      setSelectedAssignment(null);
+      refetch();
+    } catch {
+      toast.error("No fue posible devolver la asignacion");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const openTransferDialog = (assignment: Assignment) => {
+    setSelectedAssignment(assignment);
+    setTransferData({
+      type: assignment.type,
+      userId: assignment.user?.id || "",
+      departmentId: assignment.department?.id || "",
+    });
+    setTransferDialogOpen(true);
+  };
+
+  const openEditDialog = (assignment: Assignment) => {
+    setSelectedAssignment(assignment);
+    setEditData({
+      type: assignment.type,
+      status: assignment.status,
+      userId: assignment.user?.id || "",
+      departmentId: assignment.department?.id || "",
+      notes: assignment.notes || "",
+    });
+    setEditDialogOpen(true);
+  };
+
+  const handleEditAssignment = async () => {
+    if (!selectedAssignment) {
+      return;
+    }
+
+    if (editData.type === "PERSONAL" && !editData.userId) {
+      toast.error("Selecciona un usuario");
+      return;
+    }
+
+    if (editData.type === "DEPARTAMENTAL" && !editData.departmentId) {
+      toast.error("Selecciona un departamento");
+      return;
+    }
+
+    try {
+      setActionLoading(true);
+      const response = await fetch(`/api/asignaciones/${selectedAssignment.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: editData.type,
+          status: editData.status,
+          userId: editData.type === "PERSONAL" ? editData.userId : null,
+          departmentId: editData.type === "DEPARTAMENTAL" ? editData.departmentId : null,
+          notes: editData.notes || null,
+        }),
+      });
+
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        toast.error(body?.error ?? "No fue posible actualizar la asignacion");
+        return;
+      }
+
+      toast.success("Asignacion actualizada");
+      setEditDialogOpen(false);
+      setSelectedAssignment(null);
+      refetch();
+    } catch {
+      toast.error("No fue posible actualizar la asignacion");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleTransferAssignment = async () => {
+    if (!selectedAssignment) {
+      return;
+    }
+
+    if (transferData.type === "PERSONAL" && !transferData.userId) {
+      toast.error("Selecciona un usuario destino");
+      return;
+    }
+
+    if (transferData.type === "DEPARTAMENTAL" && !transferData.departmentId) {
+      toast.error("Selecciona un departamento destino");
+      return;
+    }
+
+    try {
+      setActionLoading(true);
+      const response = await fetch(`/api/asignaciones/${selectedAssignment.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          status: "TRANSFERRED",
+          type: transferData.type,
+          userId: transferData.type === "PERSONAL" ? transferData.userId : null,
+          departmentId:
+            transferData.type === "DEPARTAMENTAL" ? transferData.departmentId : null,
+        }),
+      });
+
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        toast.error(body?.error ?? "No fue posible transferir");
+        return;
+      }
+
+      toast.success("Asignacion transferida");
+      setTransferDialogOpen(false);
+      setSelectedAssignment(null);
+      refetch();
+    } catch {
+      toast.error("No fue posible transferir");
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -460,11 +628,15 @@ export default function AsignacionesPage() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => openEditDialog(assignment)}>
+                            <Edit className="h-4 w-4 mr-2" />
+                            Editar
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => openTransferDialog(assignment)}>
                             <ArrowLeftRight className="h-4 w-4 mr-2" />
                             Transferir
                           </DropdownMenuItem>
-                          <DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => openReturnDialog(assignment)}>
                             <XCircle className="h-4 w-4 mr-2" />
                             Devolver
                           </DropdownMenuItem>
@@ -478,6 +650,220 @@ export default function AsignacionesPage() {
           );
         })}
       </div>
+
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Editar asignacion</DialogTitle>
+            <DialogDescription>
+              Actualiza tipo, estado, destinatario y notas de la asignacion.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="space-y-2">
+              <Label>Tipo</Label>
+              <Select
+                value={editData.type}
+                onValueChange={(value: "PERSONAL" | "DEPARTAMENTAL") =>
+                  setEditData((prev) => ({
+                    ...prev,
+                    type: value,
+                    userId: "",
+                    departmentId: "",
+                  }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="PERSONAL">Personal</SelectItem>
+                  <SelectItem value="DEPARTAMENTAL">Departamental</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Estado</Label>
+              <Select
+                value={editData.status}
+                onValueChange={(value: "ACTIVE" | "RETURNED" | "TRANSFERRED") =>
+                  setEditData((prev) => ({ ...prev, status: value }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ACTIVE">Activo</SelectItem>
+                  <SelectItem value="TRANSFERRED">Transferido</SelectItem>
+                  <SelectItem value="RETURNED">Devuelto</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {editData.type === "PERSONAL" ? (
+              <div className="space-y-2">
+                <Label>Usuario</Label>
+                <Select
+                  value={editData.userId}
+                  onValueChange={(value) =>
+                    setEditData((prev) => ({ ...prev, userId: value }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccionar usuario" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {users.map((user) => (
+                      <SelectItem key={user.id} value={user.id}>
+                        {user.name} {user.lastName}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <Label>Departamento</Label>
+                <Select
+                  value={editData.departmentId}
+                  onValueChange={(value) =>
+                    setEditData((prev) => ({ ...prev, departmentId: value }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccionar departamento" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {departments.map((department) => (
+                      <SelectItem key={department.id} value={department.id}>
+                        {department.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <Label>Notas</Label>
+              <Textarea
+                rows={2}
+                value={editData.notes}
+                onChange={(event) =>
+                  setEditData((prev) => ({ ...prev, notes: event.target.value }))
+                }
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={handleEditAssignment} disabled={actionLoading}>
+              {actionLoading ? "Guardando..." : "Guardar cambios"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={transferDialogOpen} onOpenChange={setTransferDialogOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Transferir asignacion</DialogTitle>
+            <DialogDescription>
+              Cambia el destino de la asignacion para {selectedAssignment?.asset.name || "el activo"}.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="space-y-2">
+              <Label>Tipo destino</Label>
+              <Select
+                value={transferData.type}
+                onValueChange={(value: "PERSONAL" | "DEPARTAMENTAL") =>
+                  setTransferData((prev) => ({
+                    ...prev,
+                    type: value,
+                    userId: "",
+                    departmentId: "",
+                  }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleccionar" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="PERSONAL">Personal</SelectItem>
+                  <SelectItem value="DEPARTAMENTAL">Departamental</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {transferData.type === "PERSONAL" ? (
+              <div className="space-y-2">
+                <Label>Usuario destino</Label>
+                <Select
+                  value={transferData.userId}
+                  onValueChange={(value) =>
+                    setTransferData((prev) => ({ ...prev, userId: value }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccionar usuario" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {users.map((user) => (
+                      <SelectItem key={user.id} value={user.id}>
+                        {user.name} {user.lastName}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <Label>Departamento destino</Label>
+                <Select
+                  value={transferData.departmentId}
+                  onValueChange={(value) =>
+                    setTransferData((prev) => ({ ...prev, departmentId: value }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccionar departamento" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {departments.map((department) => (
+                      <SelectItem key={department.id} value={department.id}>
+                        {department.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setTransferDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={handleTransferAssignment} disabled={actionLoading}>
+              {actionLoading ? "Transfiriendo..." : "Transferir"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <ConfirmActionDialog
+        open={returnDialogOpen}
+        onOpenChange={setReturnDialogOpen}
+        title="Devolver asignacion"
+        description={`Se marcara como devuelta la asignacion de ${selectedAssignment?.asset.name || "este activo"}.`}
+        confirmLabel="Devolver"
+        onConfirm={handleReturnAssignment}
+        loading={actionLoading}
+      />
 
       <div className="grid gap-4 md:grid-cols-4">
         <Card>

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireAuthenticated, requireRoles } from "@/lib/api-auth";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 
@@ -26,6 +27,11 @@ function getErrorMessage(error: unknown): string {
 
 export async function GET() {
   try {
+    const { error } = await requireAuthenticated();
+    if (error) {
+      return error;
+    }
+
     const users = await prisma.user.findMany({
       include: {
         department: true,
@@ -60,6 +66,11 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    const { error } = await requireRoles(["ADMIN"]);
+    if (error) {
+      return error;
+    }
+
     const rawBody = await request.json();
     const body = createUserSchema.parse(rawBody);
     const hashedPassword = await bcrypt.hash(body.password, 12);

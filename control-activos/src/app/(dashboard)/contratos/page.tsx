@@ -20,6 +20,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Loading } from "@/components/ui/loading";
+import { ConfirmActionDialog } from "@/components/ui/confirm-action-dialog";
 import {
   Dialog,
   DialogContent,
@@ -106,6 +107,28 @@ export default function ContratosPage() {
 
   const [dialogOpen, setDialogOpen] = React.useState(false);
   const [submitting, setSubmitting] = React.useState(false);
+  const [editDialogOpen, setEditDialogOpen] = React.useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false);
+  const [actionLoading, setActionLoading] = React.useState(false);
+  const [selectedContract, setSelectedContract] = React.useState<Contract | null>(null);
+  const [editFormData, setEditFormData] = React.useState({
+    name: "",
+    type: "SERVICE" as
+      | "SERVICE"
+      | "WARRANTY"
+      | "INSURANCE"
+      | "LEASE"
+      | "LICENSE"
+      | "MAINTENANCE",
+    provider: "",
+    startDate: "",
+    endDate: "",
+    value: "",
+    status: "ACTIVE" as "ACTIVE" | "EXPIRED" | "CANCELLED" | "RENEWED",
+    notes: "",
+    assetId: "none",
+    departmentId: "none",
+  });
   const [formData, setFormData] = React.useState({
     name: "",
     type: "SERVICE" as
@@ -198,6 +221,103 @@ export default function ContratosPage() {
       toast.error("No fue posible crear el contrato");
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const openEditDialog = (contract: Contract) => {
+    setSelectedContract(contract);
+    setEditFormData({
+      name: contract.name,
+      type: contract.type,
+      provider: contract.provider,
+      startDate: new Date(contract.startDate).toISOString().slice(0, 10),
+      endDate: new Date(contract.endDate).toISOString().slice(0, 10),
+      value: contract.value?.toString() || "",
+      status: contract.status,
+      notes: contract.notes || "",
+      assetId: contract.asset?.id || "none",
+      departmentId: contract.department?.id || "none",
+    });
+    setEditDialogOpen(true);
+  };
+
+  const handleEditContract = async () => {
+    if (!selectedContract) {
+      return;
+    }
+
+    if (!editFormData.name.trim() || !editFormData.provider.trim()) {
+      toast.error("Nombre y proveedor son requeridos");
+      return;
+    }
+
+    try {
+      setActionLoading(true);
+      const response = await fetch(`/api/contratos/${selectedContract.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: editFormData.name.trim(),
+          type: editFormData.type,
+          provider: editFormData.provider.trim(),
+          startDate: editFormData.startDate,
+          endDate: editFormData.endDate,
+          value: editFormData.value ? Number(editFormData.value) : null,
+          status: editFormData.status,
+          notes: editFormData.notes || null,
+          assetId: editFormData.assetId === "none" ? null : editFormData.assetId,
+          departmentId:
+            editFormData.departmentId === "none" ? null : editFormData.departmentId,
+        }),
+      });
+
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        toast.error(body?.error ?? "No fue posible actualizar");
+        return;
+      }
+
+      toast.success("Contrato actualizado");
+      setEditDialogOpen(false);
+      setSelectedContract(null);
+      refetch();
+    } catch {
+      toast.error("No fue posible actualizar");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const openDeleteDialog = (contract: Contract) => {
+    setSelectedContract(contract);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDeleteContract = async () => {
+    if (!selectedContract) {
+      return;
+    }
+
+    try {
+      setActionLoading(true);
+      const response = await fetch(`/api/contratos/${selectedContract.id}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        toast.error(body?.error ?? "No fue posible eliminar");
+        return;
+      }
+
+      toast.success("Contrato eliminado");
+      setDeleteDialogOpen(false);
+      setSelectedContract(null);
+      refetch();
+    } catch {
+      toast.error("No fue posible eliminar");
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -456,12 +576,15 @@ export default function ContratosPage() {
                         <Eye className="h-4 w-4 mr-2" />
                         Ver detalle
                       </DropdownMenuItem>
-                      <DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => openEditDialog(contract)}>
                         <Edit className="h-4 w-4 mr-2" />
                         Editar
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
-                      <DropdownMenuItem className="text-destructive">
+                      <DropdownMenuItem
+                        className="text-destructive"
+                        onClick={() => openDeleteDialog(contract)}
+                      >
                         <Trash2 className="h-4 w-4 mr-2" />
                         Eliminar
                       </DropdownMenuItem>
@@ -544,6 +667,187 @@ export default function ContratosPage() {
           </CardContent>
         </Card>
       </div>
+
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Editar contrato</DialogTitle>
+            <DialogDescription>Actualiza todos los datos del contrato.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="space-y-2">
+              <Label>Nombre *</Label>
+              <Input
+                value={editFormData.name}
+                onChange={(event) =>
+                  setEditFormData((prev) => ({ ...prev, name: event.target.value }))
+                }
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Tipo</Label>
+                <Select
+                  value={editFormData.type}
+                  onValueChange={(
+                    value:
+                      | "SERVICE"
+                      | "WARRANTY"
+                      | "INSURANCE"
+                      | "LEASE"
+                      | "LICENSE"
+                      | "MAINTENANCE"
+                  ) => setEditFormData((prev) => ({ ...prev, type: value }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="SERVICE">Servicio</SelectItem>
+                    <SelectItem value="WARRANTY">Garantia</SelectItem>
+                    <SelectItem value="INSURANCE">Seguro</SelectItem>
+                    <SelectItem value="LEASE">Arrendamiento</SelectItem>
+                    <SelectItem value="LICENSE">Licencia</SelectItem>
+                    <SelectItem value="MAINTENANCE">Mantenimiento</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Estado</Label>
+                <Select
+                  value={editFormData.status}
+                  onValueChange={(value: "ACTIVE" | "EXPIRED" | "CANCELLED" | "RENEWED") =>
+                    setEditFormData((prev) => ({ ...prev, status: value }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ACTIVE">Activo</SelectItem>
+                    <SelectItem value="EXPIRED">Vencido</SelectItem>
+                    <SelectItem value="CANCELLED">Cancelado</SelectItem>
+                    <SelectItem value="RENEWED">Renovado</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Proveedor *</Label>
+              <Input
+                value={editFormData.provider}
+                onChange={(event) =>
+                  setEditFormData((prev) => ({ ...prev, provider: event.target.value }))
+                }
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Fecha inicio *</Label>
+                <Input
+                  type="date"
+                  value={editFormData.startDate}
+                  onChange={(event) =>
+                    setEditFormData((prev) => ({ ...prev, startDate: event.target.value }))
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Fecha fin *</Label>
+                <Input
+                  type="date"
+                  value={editFormData.endDate}
+                  onChange={(event) =>
+                    setEditFormData((prev) => ({ ...prev, endDate: event.target.value }))
+                  }
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Valor</Label>
+              <Input
+                type="number"
+                value={editFormData.value}
+                onChange={(event) =>
+                  setEditFormData((prev) => ({ ...prev, value: event.target.value }))
+                }
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Activo</Label>
+                <Select
+                  value={editFormData.assetId}
+                  onValueChange={(value) =>
+                    setEditFormData((prev) => ({ ...prev, assetId: value }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Sin activo</SelectItem>
+                    {assets.map((asset) => (
+                      <SelectItem key={asset.id} value={asset.id}>
+                        {asset.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Departamento</Label>
+                <Select
+                  value={editFormData.departmentId}
+                  onValueChange={(value) =>
+                    setEditFormData((prev) => ({ ...prev, departmentId: value }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Sin departamento</SelectItem>
+                    {departments.map((department) => (
+                      <SelectItem key={department.id} value={department.id}>
+                        {department.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Notas</Label>
+              <Textarea
+                rows={2}
+                value={editFormData.notes}
+                onChange={(event) =>
+                  setEditFormData((prev) => ({ ...prev, notes: event.target.value }))
+                }
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={handleEditContract} disabled={actionLoading}>
+              {actionLoading ? "Guardando..." : "Guardar cambios"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <ConfirmActionDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        title="Eliminar contrato"
+        description={`Se eliminara ${selectedContract?.name || "este contrato"}. Esta accion no se puede deshacer.`}
+        confirmLabel="Eliminar"
+        onConfirm={handleDeleteContract}
+        loading={actionLoading}
+      />
     </motion.div>
   );
 }

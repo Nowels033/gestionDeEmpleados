@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireAuthenticated, requireRoles } from "@/lib/api-auth";
 import { z } from "zod";
 
 const createAssignmentSchema = z
@@ -30,6 +31,11 @@ const createAssignmentSchema = z
 
 export async function GET() {
   try {
+    const { error } = await requireAuthenticated();
+    if (error) {
+      return error;
+    }
+
     const assignments = await prisma.assignment.findMany({
       include: {
         asset: {
@@ -72,6 +78,11 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    const { error } = await requireRoles(["ADMIN", "EDITOR"]);
+    if (error) {
+      return error;
+    }
+
     const rawBody = await request.json();
     const body = createAssignmentSchema.parse(rawBody);
 

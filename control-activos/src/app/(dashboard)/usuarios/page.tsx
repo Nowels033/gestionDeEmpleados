@@ -47,6 +47,8 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { Loading } from "@/components/ui/loading";
+import { ConfirmActionDialog } from "@/components/ui/confirm-action-dialog";
+import { Switch } from "@/components/ui/switch";
 import { useFetch } from "@/lib/hooks/use-fetch";
 import toast from "react-hot-toast";
 
@@ -92,6 +94,22 @@ export default function UsuariosPage() {
   const [selectedUser, setSelectedUser] = React.useState<User | null>(null);
   const [detailDialogOpen, setDetailDialogOpen] = React.useState(false);
   const [submitting, setSubmitting] = React.useState(false);
+  const [editDialogOpen, setEditDialogOpen] = React.useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false);
+  const [actionLoading, setActionLoading] = React.useState(false);
+  const [editFormData, setEditFormData] = React.useState({
+    name: "",
+    lastName: "",
+    email: "",
+    phone: "",
+    employeeNumber: "",
+    position: "",
+    departmentId: "",
+    hireDate: "",
+    role: "USER" as "ADMIN" | "EDITOR" | "USER",
+    isActive: true,
+    password: "",
+  });
   const [formData, setFormData] = React.useState({
     name: "",
     lastName: "",
@@ -169,6 +187,109 @@ export default function UsuariosPage() {
       toast.error("No fue posible crear el usuario");
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const openEditDialog = (user: User) => {
+    setSelectedUser(user);
+    setEditFormData({
+      name: user.name,
+      lastName: user.lastName,
+      email: user.email,
+      phone: user.phone || "",
+      employeeNumber: user.employeeNumber,
+      position: user.position,
+      departmentId: user.department.id,
+      hireDate: new Date(user.hireDate).toISOString().slice(0, 10),
+      role: user.role,
+      isActive: user.isActive,
+      password: "",
+    });
+    setEditDialogOpen(true);
+  };
+
+  const handleEditUser = async () => {
+    if (!selectedUser) {
+      return;
+    }
+
+    if (
+      !editFormData.name.trim() ||
+      !editFormData.lastName.trim() ||
+      !editFormData.email.trim() ||
+      !editFormData.employeeNumber.trim() ||
+      !editFormData.position.trim() ||
+      !editFormData.departmentId ||
+      !editFormData.hireDate
+    ) {
+      toast.error("Completa los campos requeridos");
+      return;
+    }
+
+    try {
+      setActionLoading(true);
+      const response = await fetch(`/api/usuarios/${selectedUser.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: editFormData.name.trim(),
+          lastName: editFormData.lastName.trim(),
+          email: editFormData.email.trim().toLowerCase(),
+          phone: editFormData.phone.trim() || null,
+          employeeNumber: editFormData.employeeNumber.trim(),
+          position: editFormData.position.trim(),
+          departmentId: editFormData.departmentId,
+          hireDate: editFormData.hireDate,
+          role: editFormData.role,
+          isActive: editFormData.isActive,
+          password: editFormData.password.trim() || undefined,
+        }),
+      });
+
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        toast.error(body?.error ?? "No fue posible actualizar");
+        return;
+      }
+
+      toast.success("Usuario actualizado");
+      setEditDialogOpen(false);
+      refetch();
+    } catch {
+      toast.error("No fue posible actualizar");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const openDeleteDialog = (user: User) => {
+    setSelectedUser(user);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDeleteUser = async () => {
+    if (!selectedUser) {
+      return;
+    }
+
+    try {
+      setActionLoading(true);
+      const response = await fetch(`/api/usuarios/${selectedUser.id}`, { method: "DELETE" });
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        toast.error(body?.error ?? "No fue posible eliminar");
+        return;
+      }
+
+      toast.success("Usuario eliminado");
+      setDeleteDialogOpen(false);
+      setDetailDialogOpen(false);
+      setSelectedUser(null);
+      refetch();
+    } catch {
+      toast.error("No fue posible eliminar");
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -409,12 +530,15 @@ export default function UsuariosPage() {
                         <Eye className="h-4 w-4 mr-2" />
                         Ver perfil
                       </DropdownMenuItem>
-                      <DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => openEditDialog(user)}>
                         <Edit className="h-4 w-4 mr-2" />
                         Editar
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
-                      <DropdownMenuItem className="text-destructive">
+                      <DropdownMenuItem
+                        className="text-destructive"
+                        onClick={() => openDeleteDialog(user)}
+                      >
                         <Trash2 className="h-4 w-4 mr-2" />
                         Eliminar
                       </DropdownMenuItem>
@@ -547,7 +671,7 @@ export default function UsuariosPage() {
               </Tabs>
 
               <DialogFooter className="mt-4">
-                <Button>
+                <Button onClick={() => selectedUser && openEditDialog(selectedUser)}>
                   <Edit className="h-4 w-4 mr-2" />
                   Editar usuario
                 </Button>
@@ -556,6 +680,173 @@ export default function UsuariosPage() {
           )}
         </DialogContent>
       </Dialog>
+
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Editar usuario</DialogTitle>
+            <DialogDescription>Actualiza toda la informacion del usuario.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Nombre *</Label>
+                <Input
+                  value={editFormData.name}
+                  onChange={(event) =>
+                    setEditFormData((prev) => ({ ...prev, name: event.target.value }))
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Apellidos *</Label>
+                <Input
+                  value={editFormData.lastName}
+                  onChange={(event) =>
+                    setEditFormData((prev) => ({ ...prev, lastName: event.target.value }))
+                  }
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Email *</Label>
+                <Input
+                  type="email"
+                  value={editFormData.email}
+                  onChange={(event) =>
+                    setEditFormData((prev) => ({ ...prev, email: event.target.value }))
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Telefono</Label>
+                <Input
+                  value={editFormData.phone}
+                  onChange={(event) =>
+                    setEditFormData((prev) => ({ ...prev, phone: event.target.value }))
+                  }
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Numero de empleado *</Label>
+                <Input
+                  value={editFormData.employeeNumber}
+                  onChange={(event) =>
+                    setEditFormData((prev) => ({
+                      ...prev,
+                      employeeNumber: event.target.value,
+                    }))
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Puesto *</Label>
+                <Input
+                  value={editFormData.position}
+                  onChange={(event) =>
+                    setEditFormData((prev) => ({ ...prev, position: event.target.value }))
+                  }
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Departamento *</Label>
+                <Select
+                  value={editFormData.departmentId}
+                  onValueChange={(value) =>
+                    setEditFormData((prev) => ({ ...prev, departmentId: value }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccionar" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {departments.map((department) => (
+                      <SelectItem key={department.id} value={department.id}>
+                        {department.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Fecha de ingreso *</Label>
+                <Input
+                  type="date"
+                  value={editFormData.hireDate}
+                  onChange={(event) =>
+                    setEditFormData((prev) => ({ ...prev, hireDate: event.target.value }))
+                  }
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Rol</Label>
+                <Select
+                  value={editFormData.role}
+                  onValueChange={(value: "ADMIN" | "EDITOR" | "USER") =>
+                    setEditFormData((prev) => ({ ...prev, role: value }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="USER">Usuario</SelectItem>
+                    <SelectItem value="EDITOR">Editor</SelectItem>
+                    <SelectItem value="ADMIN">Admin</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Nueva contrasena (opcional)</Label>
+                <Input
+                  type="password"
+                  value={editFormData.password}
+                  onChange={(event) =>
+                    setEditFormData((prev) => ({ ...prev, password: event.target.value }))
+                  }
+                />
+              </div>
+            </div>
+            <div className="flex items-center justify-between border rounded-md p-3">
+              <div>
+                <p className="font-medium">Usuario activo</p>
+                <p className="text-sm text-muted-foreground">Permite iniciar sesion en la plataforma</p>
+              </div>
+              <Switch
+                checked={editFormData.isActive}
+                onCheckedChange={(checked) =>
+                  setEditFormData((prev) => ({ ...prev, isActive: checked }))
+                }
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={handleEditUser} disabled={actionLoading}>
+              {actionLoading ? "Guardando..." : "Guardar cambios"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <ConfirmActionDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        title="Eliminar usuario"
+        description={`Se eliminara ${selectedUser?.name || "este usuario"} ${selectedUser?.lastName || ""}. Esta accion no se puede deshacer.`}
+        confirmLabel="Eliminar"
+        onConfirm={handleDeleteUser}
+        loading={actionLoading}
+      />
 
       <div className="grid gap-4 md:grid-cols-4">
         <Card>

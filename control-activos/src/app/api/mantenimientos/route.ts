@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireAuthenticated, requireRoles } from "@/lib/api-auth";
 import { z } from "zod";
 
 const createMaintenanceSchema = z.object({
@@ -14,6 +15,11 @@ const createMaintenanceSchema = z.object({
 
 export async function GET() {
   try {
+    const { error } = await requireAuthenticated();
+    if (error) {
+      return error;
+    }
+
     const maintenanceLogs = await prisma.maintenanceLog.findMany({
       include: {
         asset: {
@@ -46,6 +52,11 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    const { error } = await requireRoles(["ADMIN", "EDITOR"]);
+    if (error) {
+      return error;
+    }
+
     const rawBody = await request.json();
     const body = createMaintenanceSchema.parse(rawBody);
 

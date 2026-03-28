@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireAuthenticated, requireRoles } from "@/lib/api-auth";
 import { z } from "zod";
 
 const createAssetSchema = z.object({
@@ -20,6 +21,11 @@ const createAssetSchema = z.object({
 
 export async function GET() {
   try {
+    const { error } = await requireAuthenticated();
+    if (error) {
+      return error;
+    }
+
     const assets = await prisma.asset.findMany({
       include: {
         category: true,
@@ -64,6 +70,11 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    const { error } = await requireRoles(["ADMIN", "EDITOR"]);
+    if (error) {
+      return error;
+    }
+
     const rawBody = await request.json();
     const body = createAssetSchema.parse(rawBody);
 

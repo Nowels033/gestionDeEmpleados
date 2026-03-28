@@ -17,6 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Loading } from "@/components/ui/loading";
+import { ConfirmActionDialog } from "@/components/ui/confirm-action-dialog";
 import { useFetch } from "@/lib/hooks/use-fetch";
 import toast from "react-hot-toast";
 import {
@@ -67,6 +68,16 @@ export default function CategoriasPage() {
   const [expandedCategories, setExpandedCategories] = React.useState<string[]>([]);
   const [dialogOpen, setDialogOpen] = React.useState(false);
   const [submitting, setSubmitting] = React.useState(false);
+  const [editDialogOpen, setEditDialogOpen] = React.useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false);
+  const [actionLoading, setActionLoading] = React.useState(false);
+  const [selectedCategory, setSelectedCategory] = React.useState<Category | null>(null);
+  const [editFormData, setEditFormData] = React.useState({
+    name: "",
+    description: "",
+    icon: "",
+    parentId: "none",
+  });
   const [formData, setFormData] = React.useState({
     name: "",
     description: "",
@@ -125,6 +136,90 @@ export default function CategoriasPage() {
       toast.error("No fue posible crear la categoria");
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const openEditDialog = (category: Category) => {
+    setSelectedCategory(category);
+    setEditFormData({
+      name: category.name,
+      description: category.description || "",
+      icon: category.icon || "",
+      parentId: category.parentId || "none",
+    });
+    setEditDialogOpen(true);
+  };
+
+  const handleEditCategory = async () => {
+    if (!selectedCategory) {
+      return;
+    }
+
+    if (!editFormData.name.trim()) {
+      toast.error("El nombre de la categoria es requerido");
+      return;
+    }
+
+    try {
+      setActionLoading(true);
+      const response = await fetch(`/api/categorias/${selectedCategory.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: editFormData.name.trim(),
+          description: editFormData.description || null,
+          icon: editFormData.icon || null,
+          parentId: editFormData.parentId === "none" ? null : editFormData.parentId,
+        }),
+      });
+
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        toast.error(body?.error ?? "No fue posible actualizar");
+        return;
+      }
+
+      toast.success("Categoria actualizada");
+      setEditDialogOpen(false);
+      setSelectedCategory(null);
+      refetch();
+    } catch {
+      toast.error("No fue posible actualizar");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const openDeleteDialog = (category: Category) => {
+    setSelectedCategory(category);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDeleteCategory = async () => {
+    if (!selectedCategory) {
+      return;
+    }
+
+    try {
+      setActionLoading(true);
+      const response = await fetch(`/api/categorias/${selectedCategory.id}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        toast.error(body?.error ?? "No fue posible eliminar");
+        return;
+      }
+
+      toast.success("Categoria eliminada");
+      setDeleteDialogOpen(false);
+      setSelectedCategory(null);
+      refetch();
+    } catch {
+      toast.error("No fue posible eliminar");
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -306,12 +401,15 @@ export default function CategoriasPage() {
                         <Plus className="h-4 w-4 mr-2" />
                         Agregar subcategoría
                       </DropdownMenuItem>
-                      <DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => openEditDialog(category)}>
                         <Edit className="h-4 w-4 mr-2" />
                         Editar
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
-                      <DropdownMenuItem className="text-destructive">
+                      <DropdownMenuItem
+                        className="text-destructive"
+                        onClick={() => openDeleteDialog(category)}
+                      >
                         <Trash2 className="h-4 w-4 mr-2" />
                         Eliminar
                       </DropdownMenuItem>
@@ -352,6 +450,7 @@ export default function CategoriasPage() {
                             variant="ghost"
                             size="icon"
                             className="h-7 w-7 opacity-0 group-hover:opacity-100"
+                            onClick={() => openEditDialog(child)}
                           >
                             <Edit className="h-3 w-3" />
                           </Button>
@@ -418,6 +517,93 @@ export default function CategoriasPage() {
           </CardContent>
         </Card>
       </div>
+
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Editar categoria</DialogTitle>
+            <DialogDescription>Actualiza toda la informacion de la categoria.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit-category-name">Nombre *</Label>
+              <Input
+                id="edit-category-name"
+                value={editFormData.name}
+                onChange={(event) =>
+                  setEditFormData((prev) => ({ ...prev, name: event.target.value }))
+                }
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-category-description">Descripcion</Label>
+              <Textarea
+                id="edit-category-description"
+                rows={2}
+                value={editFormData.description}
+                onChange={(event) =>
+                  setEditFormData((prev) => ({
+                    ...prev,
+                    description: event.target.value,
+                  }))
+                }
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-category-icon">Icono (emoji)</Label>
+              <Input
+                id="edit-category-icon"
+                className="w-20"
+                value={editFormData.icon}
+                onChange={(event) =>
+                  setEditFormData((prev) => ({ ...prev, icon: event.target.value }))
+                }
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-category-parent">Categoria padre</Label>
+              <Select
+                value={editFormData.parentId}
+                onValueChange={(value) =>
+                  setEditFormData((prev) => ({ ...prev, parentId: value }))
+                }
+              >
+                <SelectTrigger id="edit-category-parent">
+                  <SelectValue placeholder="Ninguna" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Ninguna</SelectItem>
+                  {rootCategories
+                    .filter((category) => category.id !== selectedCategory?.id)
+                    .map((category) => (
+                      <SelectItem key={category.id} value={category.id}>
+                        {category.icon || "📁"} {category.name}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={handleEditCategory} disabled={actionLoading}>
+              {actionLoading ? "Guardando..." : "Guardar cambios"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <ConfirmActionDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        title="Eliminar categoria"
+        description={`Se eliminara ${selectedCategory?.name || "esta categoria"}. Esta accion no se puede deshacer.`}
+        confirmLabel="Eliminar"
+        onConfirm={handleDeleteCategory}
+        loading={actionLoading}
+      />
     </motion.div>
   );
 }

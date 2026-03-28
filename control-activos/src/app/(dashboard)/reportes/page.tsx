@@ -17,6 +17,9 @@ import type { LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Loading } from "@/components/ui/loading";
+import { useFetch } from "@/lib/hooks/use-fetch";
+import toast from "react-hot-toast";
 
 interface Report {
   id: string;
@@ -25,6 +28,18 @@ interface Report {
   category: string;
   icon: LucideIcon;
   formats: string[];
+}
+
+interface DashboardData {
+  stats: {
+    totalAssets: number;
+    assignedAssets: number;
+    availableAssets: number;
+    maintenanceAssets: number;
+    retiredAssets: number;
+    totalValue: number;
+    totalUsers: number;
+  };
 }
 
 const reports: Report[] = [
@@ -137,6 +152,18 @@ const categories = [
 ];
 
 export default function ReportesPage() {
+  const { data: dashboard, loading } = useFetch<DashboardData>("/api/dashboard", {
+    stats: {
+      totalAssets: 0,
+      assignedAssets: 0,
+      availableAssets: 0,
+      maintenanceAssets: 0,
+      retiredAssets: 0,
+      totalValue: 0,
+      totalUsers: 0,
+    },
+  });
+
   const [selectedCategory, setSelectedCategory] = React.useState<string | null>(
     null
   );
@@ -144,6 +171,17 @@ export default function ReportesPage() {
   const filteredReports = selectedCategory
     ? reports.filter((r) => r.category === selectedCategory)
     : reports;
+
+  const formatCurrency = (value: number) =>
+    new Intl.NumberFormat("es-MX", {
+      style: "currency",
+      currency: "MXN",
+      minimumFractionDigits: 0,
+    }).format(value);
+
+  if (loading) {
+    return <Loading text="Cargando reportes..." />;
+  }
 
   return (
     <motion.div
@@ -178,6 +216,33 @@ export default function ReportesPage() {
             {cat}
           </Button>
         ))}
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-4">
+        <Card>
+          <CardContent className="p-5">
+            <p className="text-sm text-muted-foreground">Activos totales</p>
+            <p className="text-2xl font-bold">{dashboard.stats.totalAssets}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-5">
+            <p className="text-sm text-muted-foreground">Activos asignados</p>
+            <p className="text-2xl font-bold">{dashboard.stats.assignedAssets}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-5">
+            <p className="text-sm text-muted-foreground">Usuarios</p>
+            <p className="text-2xl font-bold">{dashboard.stats.totalUsers}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-5">
+            <p className="text-sm text-muted-foreground">Valor inventario</p>
+            <p className="text-xl font-bold">{formatCurrency(dashboard.stats.totalValue)}</p>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Reports Grid */}
@@ -216,11 +281,20 @@ export default function ReportesPage() {
                 </div>
 
                 <div className="flex gap-2 mt-auto">
-                  <Button variant="outline" size="sm" className="flex-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex-1"
+                    onClick={() => toast("Vista previa disponible en siguiente iteracion")}
+                  >
                     <Eye className="h-4 w-4 mr-1" />
                     Vista previa
                   </Button>
-                  <Button size="sm" className="flex-1">
+                  <Button
+                    size="sm"
+                    className="flex-1"
+                    onClick={() => toast.success(`Reporte ${report.name} en cola de generacion`)}
+                  >
                     <Download className="h-4 w-4 mr-1" />
                     Generar
                   </Button>

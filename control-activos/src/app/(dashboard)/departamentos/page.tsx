@@ -28,6 +28,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Loading } from "@/components/ui/loading";
+import { ConfirmActionDialog } from "@/components/ui/confirm-action-dialog";
 import { useFetch } from "@/lib/hooks/use-fetch";
 import toast from "react-hot-toast";
 import {
@@ -67,6 +68,15 @@ export default function DepartamentosPage() {
 
   const [dialogOpen, setDialogOpen] = React.useState(false);
   const [submitting, setSubmitting] = React.useState(false);
+  const [editDialogOpen, setEditDialogOpen] = React.useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false);
+  const [actionLoading, setActionLoading] = React.useState(false);
+  const [selectedDepartment, setSelectedDepartment] = React.useState<Department | null>(null);
+  const [editFormData, setEditFormData] = React.useState({
+    name: "",
+    description: "",
+    location: "",
+  });
   const [formData, setFormData] = React.useState({
     name: "",
     description: "",
@@ -101,6 +111,88 @@ export default function DepartamentosPage() {
       toast.error("No fue posible crear el departamento");
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const openEditDialog = (department: Department) => {
+    setSelectedDepartment(department);
+    setEditFormData({
+      name: department.name,
+      description: department.description || "",
+      location: department.location || "",
+    });
+    setEditDialogOpen(true);
+  };
+
+  const handleEditDepartment = async () => {
+    if (!selectedDepartment) {
+      return;
+    }
+
+    if (!editFormData.name.trim()) {
+      toast.error("El nombre es requerido");
+      return;
+    }
+
+    try {
+      setActionLoading(true);
+      const response = await fetch(`/api/departamentos/${selectedDepartment.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: editFormData.name.trim(),
+          description: editFormData.description || null,
+          location: editFormData.location || null,
+        }),
+      });
+
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        toast.error(body?.error ?? "No fue posible actualizar");
+        return;
+      }
+
+      toast.success("Departamento actualizado");
+      setEditDialogOpen(false);
+      setSelectedDepartment(null);
+      refetch();
+    } catch {
+      toast.error("No fue posible actualizar");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const openDeleteDialog = (department: Department) => {
+    setSelectedDepartment(department);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDeleteDepartment = async () => {
+    if (!selectedDepartment) {
+      return;
+    }
+
+    try {
+      setActionLoading(true);
+      const response = await fetch(`/api/departamentos/${selectedDepartment.id}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        toast.error(body?.error ?? "No fue posible eliminar");
+        return;
+      }
+
+      toast.success("Departamento eliminado");
+      setDeleteDialogOpen(false);
+      setSelectedDepartment(null);
+      refetch();
+    } catch {
+      toast.error("No fue posible eliminar");
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -226,12 +318,15 @@ export default function DepartamentosPage() {
                         <Eye className="h-4 w-4 mr-2" />
                         Ver detalle
                       </DropdownMenuItem>
-                      <DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => openEditDialog(dept)}>
                         <Edit className="h-4 w-4 mr-2" />
                         Editar
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
-                      <DropdownMenuItem className="text-destructive">
+                      <DropdownMenuItem
+                        className="text-destructive"
+                        onClick={() => openDeleteDialog(dept)}
+                      >
                         <Trash2 className="h-4 w-4 mr-2" />
                         Eliminar
                       </DropdownMenuItem>
@@ -272,6 +367,69 @@ export default function DepartamentosPage() {
           </motion.div>
         ))}
       </div>
+
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Editar departamento</DialogTitle>
+            <DialogDescription>Actualiza los datos del departamento.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit-name">Nombre *</Label>
+              <Input
+                id="edit-name"
+                value={editFormData.name}
+                onChange={(event) =>
+                  setEditFormData((prev) => ({ ...prev, name: event.target.value }))
+                }
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-description">Descripcion</Label>
+              <Textarea
+                id="edit-description"
+                rows={2}
+                value={editFormData.description}
+                onChange={(event) =>
+                  setEditFormData((prev) => ({
+                    ...prev,
+                    description: event.target.value,
+                  }))
+                }
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-location">Ubicacion</Label>
+              <Input
+                id="edit-location"
+                value={editFormData.location}
+                onChange={(event) =>
+                  setEditFormData((prev) => ({ ...prev, location: event.target.value }))
+                }
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={handleEditDepartment} disabled={actionLoading}>
+              {actionLoading ? "Guardando..." : "Guardar cambios"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <ConfirmActionDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        title="Eliminar departamento"
+        description={`Se eliminara ${selectedDepartment?.name || "este departamento"}. Esta accion no se puede deshacer.`}
+        confirmLabel="Eliminar"
+        onConfirm={handleDeleteDepartment}
+        loading={actionLoading}
+      />
 
       {/* Stats */}
       <div className="grid gap-4 md:grid-cols-4">

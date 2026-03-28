@@ -21,6 +21,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { SafeSelect } from "@/components/ui/select";
 import { Loading } from "@/components/ui/loading";
+import { ConfirmActionDialog } from "@/components/ui/confirm-action-dialog";
 import { useFetch } from "@/lib/hooks/use-fetch";
 import {
   DropdownMenu,
@@ -93,6 +94,25 @@ export default function ActivosPage() {
   const [categoryFilter, setCategoryFilter] = React.useState("all");
   const [dialogOpen, setDialogOpen] = React.useState(false);
   const [submitting, setSubmitting] = React.useState(false);
+  const [editDialogOpen, setEditDialogOpen] = React.useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false);
+  const [actionLoading, setActionLoading] = React.useState(false);
+  const [selectedAsset, setSelectedAsset] = React.useState<Asset | null>(null);
+  const [editFormData, setEditFormData] = React.useState({
+    name: "",
+    description: "",
+    serialNumber: "",
+    brand: "",
+    model: "",
+    purchasePrice: "",
+    currentValue: "",
+    location: "",
+    qrCode: "",
+    ensLevel: "BASIC",
+    status: "AVAILABLE",
+    categoryId: "",
+    securityUserId: "",
+  });
 
   const [formData, setFormData] = React.useState({
     name: "",
@@ -157,6 +177,108 @@ export default function ActivosPage() {
       toast.error("Error al crear el activo");
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const openEditDialog = (asset: Asset) => {
+    setSelectedAsset(asset);
+    setEditFormData({
+      name: asset.name,
+      description: asset.description || "",
+      serialNumber: asset.serialNumber || "",
+      brand: asset.brand || "",
+      model: asset.model || "",
+      purchasePrice: asset.purchasePrice?.toString() || "",
+      currentValue: asset.currentValue?.toString() || "",
+      location: asset.location || "",
+      qrCode: asset.qrCode || "",
+      ensLevel: asset.ensLevel,
+      status: asset.status,
+      categoryId: asset.category.id,
+      securityUserId: asset.securityUser.id,
+    });
+    setEditDialogOpen(true);
+  };
+
+  const handleEditAsset = async () => {
+    if (!selectedAsset) {
+      return;
+    }
+
+    if (!editFormData.name.trim() || !editFormData.categoryId || !editFormData.securityUserId) {
+      toast.error("Completa los campos requeridos");
+      return;
+    }
+
+    try {
+      setActionLoading(true);
+      const response = await fetch(`/api/activos/${selectedAsset.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: editFormData.name.trim(),
+          description: editFormData.description || null,
+          serialNumber: editFormData.serialNumber || null,
+          brand: editFormData.brand || null,
+          model: editFormData.model || null,
+          purchasePrice: editFormData.purchasePrice ? Number(editFormData.purchasePrice) : null,
+          currentValue: editFormData.currentValue ? Number(editFormData.currentValue) : null,
+          location: editFormData.location || null,
+          qrCode: editFormData.qrCode || null,
+          ensLevel: editFormData.ensLevel,
+          status: editFormData.status,
+          categoryId: editFormData.categoryId,
+          securityUserId: editFormData.securityUserId,
+        }),
+      });
+
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        toast.error(body?.error ?? "No fue posible actualizar");
+        return;
+      }
+
+      toast.success("Activo actualizado");
+      setEditDialogOpen(false);
+      setSelectedAsset(null);
+      refetchAssets();
+    } catch {
+      toast.error("No fue posible actualizar");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const openDeleteDialog = (asset: Asset) => {
+    setSelectedAsset(asset);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDeleteAsset = async () => {
+    if (!selectedAsset) {
+      return;
+    }
+
+    try {
+      setActionLoading(true);
+      const response = await fetch(`/api/activos/${selectedAsset.id}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        toast.error(body?.error ?? "No fue posible eliminar");
+        return;
+      }
+
+      toast.success("Activo eliminado");
+      setDeleteDialogOpen(false);
+      setSelectedAsset(null);
+      refetchAssets();
+    } catch {
+      toast.error("No fue posible eliminar");
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -459,7 +581,12 @@ export default function ActivosPage() {
                     <Button variant="outline" size="sm" className="flex-1">
                       <Eye className="h-4 w-4 mr-1" /> Ver
                     </Button>
-                    <Button variant="outline" size="sm" className="flex-1">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex-1"
+                      onClick={() => openEditDialog(asset)}
+                    >
                       <Edit className="h-4 w-4 mr-1" /> Editar
                     </Button>
                     <DropdownMenu>
@@ -473,7 +600,10 @@ export default function ActivosPage() {
                           <FileDown className="h-4 w-4 mr-2" /> PDF
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
-                        <DropdownMenuItem className="text-destructive">
+                        <DropdownMenuItem
+                          className="text-destructive"
+                          onClick={() => openDeleteDialog(asset)}
+                        >
                           <Trash2 className="h-4 w-4 mr-2" /> Eliminar
                         </DropdownMenuItem>
                       </DropdownMenuContent>
@@ -518,7 +648,12 @@ export default function ActivosPage() {
                         <Button variant="ghost" size="icon" className="h-8 w-8">
                           <Eye className="h-4 w-4" />
                         </Button>
-                        <Button variant="ghost" size="icon" className="h-8 w-8">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => openEditDialog(asset)}
+                        >
                           <Edit className="h-4 w-4" />
                         </Button>
                       </div>
@@ -530,6 +665,159 @@ export default function ActivosPage() {
           </div>
         </Card>
       )}
+
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Editar activo</DialogTitle>
+            <DialogDescription>Actualiza toda la informacion del activo.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Nombre *</Label>
+                <Input
+                  value={editFormData.name}
+                  onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Categoria *</Label>
+                <SafeSelect
+                  value={editFormData.categoryId}
+                  onValueChange={(v) => setEditFormData({ ...editFormData, categoryId: v })}
+                  items={categoryOptions}
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Marca</Label>
+                <Input
+                  value={editFormData.brand}
+                  onChange={(e) => setEditFormData({ ...editFormData, brand: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Modelo</Label>
+                <Input
+                  value={editFormData.model}
+                  onChange={(e) => setEditFormData({ ...editFormData, model: e.target.value })}
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Numero de serie</Label>
+                <Input
+                  value={editFormData.serialNumber}
+                  onChange={(e) =>
+                    setEditFormData({ ...editFormData, serialNumber: e.target.value })
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Codigo QR</Label>
+                <Input
+                  value={editFormData.qrCode}
+                  onChange={(e) => setEditFormData({ ...editFormData, qrCode: e.target.value })}
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Precio de compra</Label>
+                <Input
+                  type="number"
+                  value={editFormData.purchasePrice}
+                  onChange={(e) =>
+                    setEditFormData({ ...editFormData, purchasePrice: e.target.value })
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Valor actual</Label>
+                <Input
+                  type="number"
+                  value={editFormData.currentValue}
+                  onChange={(e) =>
+                    setEditFormData({ ...editFormData, currentValue: e.target.value })
+                  }
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Ubicacion</Label>
+                <Input
+                  value={editFormData.location}
+                  onChange={(e) => setEditFormData({ ...editFormData, location: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Estado</Label>
+                <SafeSelect
+                  value={editFormData.status}
+                  onValueChange={(v) => setEditFormData({ ...editFormData, status: v })}
+                  items={statusOptions.filter((option) => option.value !== "all")}
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Nivel ENS</Label>
+                <SafeSelect
+                  value={editFormData.ensLevel}
+                  onValueChange={(v) => setEditFormData({ ...editFormData, ensLevel: v })}
+                  items={[
+                    { value: "BASIC", label: "Basico" },
+                    { value: "MEDIUM", label: "Medio" },
+                    { value: "HIGH", label: "Alto" },
+                  ]}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Responsable de seguridad *</Label>
+                <SafeSelect
+                  value={editFormData.securityUserId}
+                  onValueChange={(v) =>
+                    setEditFormData({ ...editFormData, securityUserId: v })
+                  }
+                  items={userOptions}
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Descripcion</Label>
+              <Textarea
+                rows={3}
+                value={editFormData.description}
+                onChange={(e) =>
+                  setEditFormData({ ...editFormData, description: e.target.value })
+                }
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={handleEditAsset} disabled={actionLoading}>
+              {actionLoading ? "Guardando..." : "Guardar cambios"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <ConfirmActionDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        title="Eliminar activo"
+        description={`Se eliminara ${selectedAsset?.name || "este activo"}. Esta accion no se puede deshacer.`}
+        confirmLabel="Eliminar"
+        onConfirm={handleDeleteAsset}
+        loading={actionLoading}
+      />
     </motion.div>
   );
 }
