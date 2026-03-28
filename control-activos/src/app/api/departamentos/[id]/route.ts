@@ -53,7 +53,7 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
@@ -63,9 +63,125 @@ export async function DELETE(
     }
 
     const { id } = await params;
-    await prisma.department.delete({ where: { id } });
+    const rawBody = await request.json().catch(() => null);
+    const targetDepartmentId =
+      rawBody && typeof rawBody.targetDepartmentId === "string"
+        ? rawBody.targetDepartmentId
+        : null;
+
+    const department = await prisma.department.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        name: true,
+        _count: {
+          select: {
+            users: true,
+            assignments: true,
+            contracts: true,
+          },
+        },
+      },
+    });
+
+    if (!department) {
+      return NextResponse.json({ error: "Departamento no encontrado" }, { status: 404 });
+    }
+
+    if (targetDepartmentId && targetDepartmentId === id) {
+      return NextResponse.json(
+        { error: "No puedes mover usuarios al mismo departamento que sera eliminado" },
+        { status: 400 }
+      );
+    }
+
+    if (targetDepartmentId) {
+      const targetDepartment = await prisma.department.findUnique({
+        where: { id: targetDepartmentId },
+        select: { id: true, isActive: true },
+      });
+
+      if (!targetDepartment || !targetDepartment.isActive) {
+        return NextResponse.json(
+          { error: "El departamento destino no existe o esta inactivo" },
+          { status: 400 }
+        );
+      }
+    }
+
+    if (department._count.users > 0) {
+      if (!targetDepartmentId) {
+        return NextResponse.json(
+          {
+            error: `No se puede eliminar ${department.name} porque tiene ${department._count.users} usuarios asignados. Selecciona un departamento destino para moverlos.`,
+          },
+          { status: 409 }
+        );
+      }
+
+      await prisma.$transaction(async (tx) => {
+        await tx.user.updateMany({
+          where: { departmentId: id },
+          data: { departmentId: targetDepartmentId },
+        });
+
+        await tx.assignment.updateMany({
+          where: { departmentId: id },
+          data: { departmentId: targetDepartmentId },
+        });
+
+        await tx.contract.updateMany({
+          where: { departmentId: id },
+          data: { departmentId: targetDepartmentId },
+        });
+
+        await tx.department.delete({ where: { id } });
+      });
+
+      return NextResponse.json({ ok: true });
+    }
+
+    if (!targetDepartmentId) {
+      await prisma.$transaction(async (tx) => {
+        await tx.assignment.updateMany({
+          where: { departmentId: id },
+          data: { departmentId: null },
+        });
+
+        await tx.contract.updateMany({
+          where: { departmentId: id },
+          data: { departmentId: null },
+        });
+
+        await tx.department.delete({ where: { id } });
+      });
+
+      return NextResponse.json({ ok: true });
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.assignment.updateMany({
+        where: { departmentId: id },
+        data: { departmentId: targetDepartmentId },
+      });
+
+      await tx.contract.updateMany({
+        where: { departmentId: id },
+        data: { departmentId: targetDepartmentId },
+      });
+
+      await tx.department.delete({ where: { id } });
+    });
+
     return NextResponse.json({ ok: true });
   } catch (error) {
+    if (typeof error === "object" && error !== null && "code" in error && error.code === "P2003") {
+      return NextResponse.json(
+        { error: "No se pudo eliminar el departamento por relaciones dependientes" },
+        { status: 409 }
+      );
+    }
+
     if (typeof error === "object" && error !== null && "code" in error && error.code === "P2025") {
       return NextResponse.json({ error: "Departamento no encontrado" }, { status: 404 });
     }

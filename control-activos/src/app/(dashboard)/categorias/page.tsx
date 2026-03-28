@@ -17,7 +17,9 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Loading } from "@/components/ui/loading";
+import { EmptyState } from "@/components/ui/empty-state";
 import { ConfirmActionDialog } from "@/components/ui/confirm-action-dialog";
+import { DashboardPageHeader } from "@/components/layout/dashboard-page-header";
 import { useFetch } from "@/lib/hooks/use-fetch";
 import toast from "react-hot-toast";
 import {
@@ -239,15 +241,12 @@ export default function CategoriasPage() {
       animate={{ opacity: 1, y: 0 }}
       className="space-y-6"
     >
-      {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Categorías</h1>
-          <p className="text-muted-foreground">
-            Organiza tus activos por tipo y subcategorías
-          </p>
-        </div>
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+      <DashboardPageHeader
+        eyebrow="Catalogo"
+        title="Categorias"
+        description="Organiza tus activos por tipo y subcategorias"
+        actions={
+          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
             <Button>
               <Plus className="h-4 w-4 mr-2" />
@@ -332,7 +331,8 @@ export default function CategoriasPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
-      </div>
+        }
+      />
 
       {/* Categories Tree */}
       <Card>
@@ -343,6 +343,15 @@ export default function CategoriasPage() {
           </CardTitle>
         </CardHeader>
         <CardContent>
+          {rootCategories.length === 0 ? (
+            <EmptyState
+              icon={FolderTree}
+              title="Aun no hay categorias"
+              description="Crea categorias y subcategorias para estructurar mejor tus activos."
+              actionLabel="Nueva categoria"
+              onAction={() => setDialogOpen(true)}
+            />
+          ) : (
           <div className="space-y-2">
             {rootCategories.map((category) => (
               <motion.div
@@ -461,6 +470,7 @@ export default function CategoriasPage() {
               </motion.div>
             ))}
           </div>
+          )}
         </CardContent>
       </Card>
 

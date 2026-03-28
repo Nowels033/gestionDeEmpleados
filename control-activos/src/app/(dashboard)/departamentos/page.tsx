@@ -28,9 +28,17 @@ import {
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Loading } from "@/components/ui/loading";
-import { ConfirmActionDialog } from "@/components/ui/confirm-action-dialog";
+import { EmptyState } from "@/components/ui/empty-state";
+import { DashboardPageHeader } from "@/components/layout/dashboard-page-header";
 import { useFetch } from "@/lib/hooks/use-fetch";
 import toast from "react-hot-toast";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -46,6 +54,8 @@ interface Department {
   location: string | null;
   _count: {
     users: number;
+    assignments: number;
+    contracts: number;
   };
   assetCount: number;
   assetValue: number;
@@ -72,6 +82,22 @@ export default function DepartamentosPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false);
   const [actionLoading, setActionLoading] = React.useState(false);
   const [selectedDepartment, setSelectedDepartment] = React.useState<Department | null>(null);
+  const [deleteTargetDepartmentId, setDeleteTargetDepartmentId] = React.useState("none");
+  const [creatingTargetDepartment, setCreatingTargetDepartment] = React.useState(false);
+  const [newTargetDepartmentName, setNewTargetDepartmentName] = React.useState("");
+  const [newTargetDepartmentLocation, setNewTargetDepartmentLocation] = React.useState("");
+  const [deleteConfirmationText, setDeleteConfirmationText] = React.useState("");
+
+  const selectedTargetDepartmentName = React.useMemo(() => {
+    if (deleteTargetDepartmentId === "none") {
+      return null;
+    }
+
+    return (
+      departments.find((department) => department.id === deleteTargetDepartmentId)?.name ||
+      null
+    );
+  }, [deleteTargetDepartmentId, departments]);
   const [editFormData, setEditFormData] = React.useState({
     name: "",
     description: "",
@@ -82,6 +108,18 @@ export default function DepartamentosPage() {
     description: "",
     location: "",
   });
+
+  const requiresHardDeleteConfirmation = React.useMemo(() => {
+    if (!selectedDepartment) {
+      return false;
+    }
+
+    return (
+      selectedDepartment._count.users >= 10 ||
+      selectedDepartment._count.assignments >= 20 ||
+      selectedDepartment._count.contracts >= 10
+    );
+  }, [selectedDepartment]);
 
   const handleCreateDepartment = async () => {
     if (!formData.name.trim()) {
@@ -165,7 +203,48 @@ export default function DepartamentosPage() {
 
   const openDeleteDialog = (department: Department) => {
     setSelectedDepartment(department);
+    const fallbackTarget = departments.find((item) => item.id !== department.id);
+    setDeleteTargetDepartmentId(fallbackTarget?.id || "none");
+    setNewTargetDepartmentName("");
+    setNewTargetDepartmentLocation("");
+    setDeleteConfirmationText("");
     setDeleteDialogOpen(true);
+  };
+
+  const handleCreateTargetDepartment = async () => {
+    if (!newTargetDepartmentName.trim()) {
+      toast.error("Ingresa un nombre para el departamento destino");
+      return;
+    }
+
+    try {
+      setCreatingTargetDepartment(true);
+      const response = await fetch("/api/departamentos", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: newTargetDepartmentName.trim(),
+          location: newTargetDepartmentLocation.trim() || undefined,
+        }),
+      });
+
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        toast.error(body?.error ?? "No fue posible crear el departamento destino");
+        return;
+      }
+
+      const createdDepartment = (await response.json()) as { id: string; name: string };
+      await refetch();
+      setDeleteTargetDepartmentId(createdDepartment.id);
+      setNewTargetDepartmentName("");
+      setNewTargetDepartmentLocation("");
+      toast.success(`Departamento destino creado: ${createdDepartment.name}`);
+    } catch {
+      toast.error("No fue posible crear el departamento destino");
+    } finally {
+      setCreatingTargetDepartment(false);
+    }
   };
 
   const handleDeleteDepartment = async () => {
@@ -174,9 +253,28 @@ export default function DepartamentosPage() {
     }
 
     try {
+      if (selectedDepartment._count.users > 0 && deleteTargetDepartmentId === "none") {
+        toast.error("Selecciona un departamento destino para mover usuarios");
+        return;
+      }
+
+      if (
+        requiresHardDeleteConfirmation &&
+        deleteConfirmationText.trim().toUpperCase() !== "ELIMINAR"
+      ) {
+        toast.error('Escribe "ELIMINAR" para confirmar una operacion de alto impacto');
+        return;
+      }
+
       setActionLoading(true);
+
       const response = await fetch(`/api/departamentos/${selectedDepartment.id}`, {
         method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          targetDepartmentId:
+            deleteTargetDepartmentId === "none" ? null : deleteTargetDepartmentId,
+        }),
       });
 
       if (!response.ok) {
@@ -188,6 +286,8 @@ export default function DepartamentosPage() {
       toast.success("Departamento eliminado");
       setDeleteDialogOpen(false);
       setSelectedDepartment(null);
+      setDeleteTargetDepartmentId("none");
+      setDeleteConfirmationText("");
       refetch();
     } catch {
       toast.error("No fue posible eliminar");
@@ -206,15 +306,12 @@ export default function DepartamentosPage() {
       animate={{ opacity: 1, y: 0 }}
       className="space-y-6"
     >
-      {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Departamentos</h1>
-          <p className="text-muted-foreground">
-            Gestiona los departamentos de tu organización
-          </p>
-        </div>
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+      <DashboardPageHeader
+        eyebrow="Estructura"
+        title="Departamentos"
+        description="Gestiona los departamentos de tu organizacion"
+        actions={
+          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
             <Button>
               <Plus className="h-4 w-4 mr-2" />
@@ -277,9 +374,19 @@ export default function DepartamentosPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
-      </div>
+        }
+      />
 
       {/* Departments Grid */}
+      {departments.length === 0 ? (
+        <EmptyState
+          icon={Building2}
+          title="Sin departamentos"
+          description="Crea tu primer departamento para empezar a organizar usuarios y activos."
+          actionLabel="Nuevo departamento"
+          onAction={() => setDialogOpen(true)}
+        />
+      ) : (
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {departments.map((dept, index) => (
           <motion.div
@@ -367,6 +474,7 @@ export default function DepartamentosPage() {
           </motion.div>
         ))}
       </div>
+      )}
 
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
         <DialogContent>
@@ -421,15 +529,138 @@ export default function DepartamentosPage() {
         </DialogContent>
       </Dialog>
 
-      <ConfirmActionDialog
+      <Dialog
         open={deleteDialogOpen}
-        onOpenChange={setDeleteDialogOpen}
-        title="Eliminar departamento"
-        description={`Se eliminara ${selectedDepartment?.name || "este departamento"}. Esta accion no se puede deshacer.`}
-        confirmLabel="Eliminar"
-        onConfirm={handleDeleteDepartment}
-        loading={actionLoading}
-      />
+        onOpenChange={(open) => {
+          setDeleteDialogOpen(open);
+          if (!open) {
+            setDeleteConfirmationText("");
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Eliminar departamento</DialogTitle>
+            <DialogDescription>
+              {selectedDepartment?._count.users
+                ? `Este departamento tiene ${selectedDepartment._count.users} usuarios. Debes moverlos antes de eliminar.`
+                : `Se eliminara ${selectedDepartment?.name || "este departamento"}. Esta accion no se puede deshacer.`}
+            </DialogDescription>
+          </DialogHeader>
+
+          {selectedDepartment && selectedDepartment._count.users > 0 ? (
+            <div className="space-y-4 py-2">
+              <div className="space-y-2">
+                <Label>Departamento destino para usuarios/activos relacionados</Label>
+                <Select
+                  value={deleteTargetDepartmentId}
+                  onValueChange={setDeleteTargetDepartmentId}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccionar departamento destino" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {departments
+                      .filter((department) => department.id !== selectedDepartment.id)
+                      .map((department) => (
+                        <SelectItem key={department.id} value={department.id}>
+                          {department.name}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="rounded-lg border border-border/70 bg-muted/30 p-3 space-y-3">
+                <p className="text-sm font-medium">Crear departamento destino rapido</p>
+                <div className="space-y-2">
+                  <Label htmlFor="new-target-name">Nombre</Label>
+                  <Input
+                    id="new-target-name"
+                    placeholder="Ej: Operaciones"
+                    value={newTargetDepartmentName}
+                    onChange={(event) => setNewTargetDepartmentName(event.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="new-target-location">Ubicacion</Label>
+                  <Input
+                    id="new-target-location"
+                    placeholder="Ej: Edificio B"
+                    value={newTargetDepartmentLocation}
+                    onChange={(event) => setNewTargetDepartmentLocation(event.target.value)}
+                  />
+                </div>
+                <Button
+                  variant="outline"
+                  onClick={handleCreateTargetDepartment}
+                  disabled={creatingTargetDepartment}
+                >
+                  {creatingTargetDepartment ? "Creando..." : "Crear y seleccionar"}
+                </Button>
+              </div>
+
+              <div className="rounded-lg border border-border/70 bg-primary/5 p-3 text-sm space-y-2">
+                <p className="font-medium">Impacto de la operacion</p>
+                <p className="text-muted-foreground">
+                  Se moveran <strong>{selectedDepartment._count.users}</strong> usuarios,
+                  <strong> {selectedDepartment._count.assignments}</strong> asignaciones y
+                  <strong> {selectedDepartment._count.contracts}</strong> contratos
+                  {selectedTargetDepartmentName
+                    ? ` al departamento ${selectedTargetDepartmentName}.`
+                    : "."}
+                </p>
+              </div>
+            </div>
+          ) : selectedDepartment ? (
+            <div className="rounded-lg border border-border/70 bg-primary/5 p-3 text-sm space-y-2">
+              <p className="font-medium">Impacto de la operacion</p>
+              <p className="text-muted-foreground">
+                Este departamento no tiene usuarios. Se eliminaran sus datos base y las
+                referencias de asignaciones/contratos se moveran
+                {selectedTargetDepartmentName
+                  ? ` a ${selectedTargetDepartmentName}`
+                  : " a sin departamento"}
+                .
+              </p>
+            </div>
+          ) : null}
+
+          {requiresHardDeleteConfirmation ? (
+            <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 space-y-2">
+              <p className="text-sm font-medium text-destructive">Confirmacion reforzada requerida</p>
+              <p className="text-sm text-muted-foreground">
+                Esta operacion tiene alto impacto. Escribe <strong>ELIMINAR</strong> para continuar.
+              </p>
+              <Input
+                placeholder="Escribe ELIMINAR"
+                value={deleteConfirmationText}
+                onChange={(event) => setDeleteConfirmationText(event.target.value)}
+              />
+            </div>
+          ) : null}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDeleteDepartment}
+              disabled={
+                actionLoading ||
+                (selectedDepartment?._count.users
+                  ? deleteTargetDepartmentId === "none"
+                  : false) ||
+                (requiresHardDeleteConfirmation &&
+                  deleteConfirmationText.trim().toUpperCase() !== "ELIMINAR")
+              }
+            >
+              {actionLoading ? "Eliminando..." : "Eliminar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Stats */}
       <div className="grid gap-4 md:grid-cols-4">

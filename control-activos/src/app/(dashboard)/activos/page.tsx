@@ -14,6 +14,10 @@ import {
   Trash2,
   FileDown,
   QrCode,
+  Columns3,
+  Save,
+  Check,
+  RotateCcw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,12 +25,17 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { SafeSelect } from "@/components/ui/select";
 import { Loading } from "@/components/ui/loading";
+import { EmptyState } from "@/components/ui/empty-state";
 import { ConfirmActionDialog } from "@/components/ui/confirm-action-dialog";
+import { DashboardPageHeader } from "@/components/layout/dashboard-page-header";
 import { useFetch } from "@/lib/hooks/use-fetch";
+import { downloadCsv } from "@/lib/csv";
+import { cn } from "@/lib/utils";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -83,7 +92,30 @@ const statusConfig: Record<string, { label: string; variant: "success" | "info" 
   RETIRED: { label: "Dado de baja", variant: "destructive" },
 };
 
+const columnDefinitions = [
+  { key: "code", label: "Codigo" },
+  { key: "name", label: "Nombre" },
+  { key: "category", label: "Categoria" },
+  { key: "status", label: "Estado" },
+  { key: "value", label: "Valor" },
+  { key: "owner", label: "Responsable" },
+] as const;
+
+type AssetColumnKey = (typeof columnDefinitions)[number]["key"];
+
+interface SavedAssetView {
+  id: string;
+  name: string;
+  viewMode: "grid" | "list";
+  searchQuery: string;
+  statusFilter: string;
+  categoryFilter: string;
+}
+
 export default function ActivosPage() {
+  const FILTERS_STORAGE_KEY = "activos.filters.v1";
+  const VIEWS_STORAGE_KEY = "activos.saved-views.v1";
+
   const { data: assets, loading: loadingAssets, refetch: refetchAssets } = useFetch<Asset[]>("/api/activos", []);
   const { data: categories } = useFetch<Category[]>("/api/categorias", []);
   const { data: users } = useFetch<User[]>("/api/usuarios", []);
@@ -98,6 +130,22 @@ export default function ActivosPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false);
   const [actionLoading, setActionLoading] = React.useState(false);
   const [selectedAsset, setSelectedAsset] = React.useState<Asset | null>(null);
+  const [selectedAssetIds, setSelectedAssetIds] = React.useState<string[]>([]);
+  const [bulkDeleting, setBulkDeleting] = React.useState(false);
+  const [bulkUpdatingStatus, setBulkUpdatingStatus] = React.useState(false);
+  const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = React.useState(false);
+  const [filtersHydrated, setFiltersHydrated] = React.useState(false);
+  const [selectedColumns, setSelectedColumns] = React.useState<AssetColumnKey[]>([
+    "code",
+    "name",
+    "category",
+    "status",
+    "value",
+  ]);
+  const [savedViews, setSavedViews] = React.useState<SavedAssetView[]>([]);
+  const [selectedSavedView, setSelectedSavedView] = React.useState("none");
+  const [saveViewDialogOpen, setSaveViewDialogOpen] = React.useState(false);
+  const [newViewName, setNewViewName] = React.useState("");
   const [editFormData, setEditFormData] = React.useState({
     name: "",
     description: "",
@@ -145,6 +193,86 @@ export default function ActivosPage() {
       securityUserId: "",
     });
   };
+
+  React.useEffect(() => {
+    if (filtersHydrated) {
+      return;
+    }
+
+    try {
+      const raw = localStorage.getItem(FILTERS_STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as {
+          viewMode?: "grid" | "list";
+          searchQuery?: string;
+          statusFilter?: string;
+          categoryFilter?: string;
+          selectedColumns?: AssetColumnKey[];
+        };
+
+        if (parsed.viewMode === "grid" || parsed.viewMode === "list") {
+          setViewMode(parsed.viewMode);
+        }
+        if (typeof parsed.searchQuery === "string") {
+          setSearchQuery(parsed.searchQuery);
+        }
+        if (typeof parsed.statusFilter === "string") {
+          setStatusFilter(parsed.statusFilter);
+        }
+        if (typeof parsed.categoryFilter === "string") {
+          setCategoryFilter(parsed.categoryFilter);
+        }
+        if (Array.isArray(parsed.selectedColumns) && parsed.selectedColumns.length > 0) {
+          const validColumns = parsed.selectedColumns.filter((column): column is AssetColumnKey =>
+            columnDefinitions.some((definition) => definition.key === column)
+          );
+          if (validColumns.length > 0) {
+            setSelectedColumns(validColumns);
+          }
+        }
+      }
+
+      const rawViews = localStorage.getItem(VIEWS_STORAGE_KEY);
+      if (rawViews) {
+        const parsedViews = JSON.parse(rawViews) as SavedAssetView[];
+        if (Array.isArray(parsedViews)) {
+          setSavedViews(parsedViews);
+        }
+      }
+    } catch {
+      // noop
+    } finally {
+      setFiltersHydrated(true);
+    }
+  }, [filtersHydrated, FILTERS_STORAGE_KEY]);
+
+  React.useEffect(() => {
+    if (!filtersHydrated) {
+      return;
+    }
+
+    localStorage.setItem(
+      FILTERS_STORAGE_KEY,
+      JSON.stringify({
+        viewMode,
+        searchQuery,
+        statusFilter,
+        categoryFilter,
+        selectedColumns,
+      })
+    );
+    localStorage.setItem(VIEWS_STORAGE_KEY, JSON.stringify(savedViews));
+  }, [
+    viewMode,
+    searchQuery,
+    statusFilter,
+    categoryFilter,
+    selectedColumns,
+    savedViews,
+    filtersHydrated,
+    FILTERS_STORAGE_KEY,
+    VIEWS_STORAGE_KEY,
+  ]);
 
   const handleCreateAsset = async () => {
     if (!formData.name || !formData.categoryId || !formData.securityUserId) {
@@ -274,12 +402,220 @@ export default function ActivosPage() {
       toast.success("Activo eliminado");
       setDeleteDialogOpen(false);
       setSelectedAsset(null);
+      setSelectedAssetIds((prev) => prev.filter((id) => id !== selectedAsset.id));
       refetchAssets();
     } catch {
       toast.error("No fue posible eliminar");
     } finally {
       setActionLoading(false);
     }
+  };
+
+  const toggleSelectedAsset = (assetId: string) => {
+    setSelectedAssetIds((prev) =>
+      prev.includes(assetId) ? prev.filter((id) => id !== assetId) : [...prev, assetId]
+    );
+  };
+
+  const toggleAllFilteredAssets = () => {
+    const allVisibleIds = filteredAssets.map((asset) => asset.id);
+    const allSelected =
+      allVisibleIds.length > 0 && allVisibleIds.every((assetId) => selectedAssetIds.includes(assetId));
+
+    if (allSelected) {
+      setSelectedAssetIds((prev) => prev.filter((id) => !allVisibleIds.includes(id)));
+      return;
+    }
+
+    setSelectedAssetIds((prev) => Array.from(new Set([...prev, ...allVisibleIds])));
+  };
+
+  const openBulkDeleteDialog = () => {
+    if (selectedAssetIds.length === 0) {
+      return;
+    }
+    setBulkDeleteDialogOpen(true);
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedAssetIds.length === 0) {
+      return;
+    }
+
+    try {
+      setBulkDeleting(true);
+
+      const results = await Promise.all(
+        selectedAssetIds.map(async (assetId) => {
+          const response = await fetch(`/api/activos/${assetId}`, { method: "DELETE" });
+          return response.ok;
+        })
+      );
+
+      const successCount = results.filter(Boolean).length;
+      const failedCount = results.length - successCount;
+
+      if (successCount > 0) {
+        toast.success(`${successCount} activos eliminados`);
+      }
+      if (failedCount > 0) {
+        toast.error(`${failedCount} activos no se pudieron eliminar`);
+      }
+
+      setSelectedAssetIds([]);
+      setBulkDeleteDialogOpen(false);
+      refetchAssets();
+    } catch {
+      toast.error("No fue posible eliminar los activos seleccionados");
+    } finally {
+      setBulkDeleting(false);
+    }
+  };
+
+  const handleBulkStatusUpdate = async (status: "AVAILABLE" | "ASSIGNED" | "MAINTENANCE" | "RETIRED") => {
+    if (selectedAssetIds.length === 0) {
+      return;
+    }
+
+    try {
+      setBulkUpdatingStatus(true);
+      const results = await Promise.all(
+        selectedAssetIds.map(async (assetId) => {
+          const response = await fetch(`/api/activos/${assetId}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ status }),
+          });
+          return response.ok;
+        })
+      );
+
+      const successCount = results.filter(Boolean).length;
+      const failedCount = results.length - successCount;
+
+      if (successCount > 0) {
+        toast.success(`${successCount} activos actualizados a ${statusConfig[status].label}`);
+      }
+      if (failedCount > 0) {
+        toast.error(`${failedCount} activos no pudieron actualizarse`);
+      }
+
+      refetchAssets();
+    } catch {
+      toast.error("No fue posible actualizar estado en lote");
+    } finally {
+      setBulkUpdatingStatus(false);
+    }
+  };
+
+  const toggleColumn = (column: AssetColumnKey) => {
+    setSelectedColumns((prev) => {
+      if (prev.includes(column)) {
+        if (prev.length === 1) {
+          return prev;
+        }
+        return prev.filter((item) => item !== column);
+      }
+      return [...prev, column];
+    });
+  };
+
+  const createViewId = () => `view-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+  const handleSaveCurrentView = () => {
+    const name = newViewName.trim();
+    if (!name) {
+      toast.error("Ingresa un nombre para la vista");
+      return;
+    }
+
+    const newView: SavedAssetView = {
+      id: createViewId(),
+      name,
+      viewMode,
+      searchQuery,
+      statusFilter,
+      categoryFilter,
+    };
+
+    setSavedViews((prev) => [newView, ...prev]);
+    setSelectedSavedView(newView.id);
+    setNewViewName("");
+    setSaveViewDialogOpen(false);
+    toast.success("Vista guardada correctamente");
+  };
+
+  const applySavedView = (viewId: string) => {
+    setSelectedSavedView(viewId);
+    if (viewId === "none") {
+      return;
+    }
+
+    const view = savedViews.find((item) => item.id === viewId);
+    if (!view) {
+      return;
+    }
+
+    setViewMode(view.viewMode);
+    setSearchQuery(view.searchQuery);
+    setStatusFilter(view.statusFilter);
+    setCategoryFilter(view.categoryFilter);
+    toast.success(`Vista \"${view.name}\" aplicada`);
+  };
+
+  const handleDeleteSavedView = () => {
+    if (selectedSavedView === "none") {
+      return;
+    }
+
+    const view = savedViews.find((item) => item.id === selectedSavedView);
+    if (!view) {
+      return;
+    }
+
+    setSavedViews((prev) => prev.filter((item) => item.id !== view.id));
+    setSelectedSavedView("none");
+    toast.success(`Vista \"${view.name}\" eliminada`);
+  };
+
+  const handleExportCsv = () => {
+    const columnToCsv = {
+      code: {
+        key: "qrCode",
+        header: "Codigo",
+        map: (asset: Asset) => asset.qrCode || asset.id,
+      },
+      name: {
+        key: "name",
+        header: "Nombre",
+      },
+      category: {
+        key: "category",
+        header: "Categoria",
+        map: (asset: Asset) => asset.category.name,
+      },
+      status: {
+        key: "status",
+        header: "Estado",
+      },
+      value: {
+        key: "currentValue",
+        header: "Valor Actual",
+        map: (asset: Asset) => asset.currentValue,
+      },
+      owner: {
+        key: "securityUser",
+        header: "Responsable Seguridad",
+        map: (asset: Asset) => `${asset.securityUser.name} ${asset.securityUser.lastName}`,
+      },
+    } as const;
+
+    downloadCsv(
+      filteredAssets,
+      selectedColumns.map((columnKey) => columnToCsv[columnKey]),
+      `activos-${new Date().toISOString().slice(0, 10)}.csv`
+    );
+    toast.success("CSV exportado correctamente");
   };
 
   const filteredAssets = assets.filter((asset) => {
@@ -321,6 +657,29 @@ export default function ActivosPage() {
     { value: "RETIRED", label: "Dado de baja" },
   ];
 
+  React.useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey) || !event.shiftKey) {
+        return;
+      }
+
+      const key = event.key.toLowerCase();
+      if (key === "a") {
+        event.preventDefault();
+        toggleAllFilteredAssets();
+      }
+
+      if (key === "e") {
+        event.preventDefault();
+        handleExportCsv();
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filteredAssets, selectedAssetIds, selectedColumns]);
+
   if (loadingAssets) {
     return <Loading text="Cargando activos..." />;
   }
@@ -331,19 +690,42 @@ export default function ActivosPage() {
       animate={{ opacity: 1, y: 0 }}
       className="space-y-6"
     >
-      {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Activos</h1>
-          <p className="text-muted-foreground">
-            {assets.length} activos registrados
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm">
+      <DashboardPageHeader
+        eyebrow="Inventario"
+        title="Activos"
+        description={`${assets.length} activos registrados`}
+        actions={
+          <>
+          <Button variant="outline" size="sm" onClick={handleExportCsv}>
             <FileDown className="h-4 w-4 mr-2" />
             Exportar
           </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm">
+                <Columns3 className="h-4 w-4 mr-2" />
+                Columnas
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuLabel>Columnas visibles</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              {columnDefinitions.map((column) => (
+                <DropdownMenuItem
+                  key={column.key}
+                  onSelect={(event) => {
+                    event.preventDefault();
+                    toggleColumn(column.key);
+                  }}
+                >
+                  <span className="mr-2 inline-flex w-4 justify-center">
+                    {selectedColumns.includes(column.key) ? <Check className="h-4 w-4" /> : null}
+                  </span>
+                  {column.label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger asChild>
               <Button size="sm" onClick={() => { resetForm(); setDialogOpen(true); }}>
@@ -464,8 +846,9 @@ export default function ActivosPage() {
               </DialogFooter>
             </DialogContent>
           </Dialog>
-        </div>
-      </div>
+          </>
+        }
+      />
 
       {/* Filters */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
@@ -479,6 +862,41 @@ export default function ActivosPage() {
           />
         </div>
         <div className="flex items-center gap-2">
+          <SafeSelect
+            value={selectedSavedView}
+            onValueChange={applySavedView}
+            placeholder="Vistas"
+            items={[
+              { value: "none", label: "Vista por defecto" },
+              ...savedViews.map((view) => ({ value: view.id, label: view.name })),
+            ]}
+            className="w-[180px]"
+          />
+          <Button variant="outline" size="sm" onClick={() => setSaveViewDialogOpen(true)}>
+            <Save className="h-4 w-4 mr-2" />
+            Guardar vista
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleDeleteSavedView}
+            disabled={selectedSavedView === "none"}
+          >
+            Eliminar vista
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              setSearchQuery("");
+              setStatusFilter("all");
+              setCategoryFilter("all");
+              setSelectedSavedView("none");
+            }}
+          >
+            <RotateCcw className="h-4 w-4 mr-2" />
+            Reset
+          </Button>
           <SafeSelect
             value={statusFilter}
             onValueChange={setStatusFilter}
@@ -515,22 +933,61 @@ export default function ActivosPage() {
       </div>
 
       {/* Results */}
-      <p className="text-sm text-muted-foreground">
-        Mostrando {filteredAssets.length} de {assets.length} activos
-      </p>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-sm text-muted-foreground">
+          Mostrando {filteredAssets.length} de {assets.length} activos
+        </p>
+        {selectedAssetIds.length > 0 && (
+          <div className="fixed bottom-4 left-4 right-4 z-30 flex flex-wrap items-center gap-2 rounded-xl border border-border/70 bg-background/95 px-3 py-2 text-sm shadow-lg backdrop-blur md:left-auto md:right-6 md:max-w-fit">
+            <span className="font-medium">{selectedAssetIds.length} seleccionados</span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleBulkStatusUpdate("AVAILABLE")}
+              disabled={bulkUpdatingStatus}
+            >
+              Disponible
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleBulkStatusUpdate("MAINTENANCE")}
+              disabled={bulkUpdatingStatus}
+            >
+              Mantenimiento
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleBulkStatusUpdate("RETIRED")}
+              disabled={bulkUpdatingStatus}
+            >
+              Retirar
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setSelectedAssetIds([])}>
+              Limpiar
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={openBulkDeleteDialog}
+              disabled={bulkDeleting}
+            >
+              {bulkDeleting ? "Eliminando..." : "Eliminar seleccionados"}
+            </Button>
+          </div>
+        )}
+      </div>
 
       {/* Assets */}
       {filteredAssets.length === 0 ? (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12">
-            <Package className="h-12 w-12 text-muted-foreground/30 mb-4" />
-            <p className="text-muted-foreground mb-4">No se encontraron activos</p>
-            <Button onClick={() => setDialogOpen(true)}>
-              <Plus className="h-4 w-4 mr-2" />
-              Crear primer activo
-            </Button>
-          </CardContent>
-        </Card>
+        <EmptyState
+          icon={Package}
+          title="No se encontraron activos"
+          description="Prueba cambiando filtros o crea un activo nuevo para comenzar a gestionar el inventario."
+          actionLabel="Crear activo"
+          onAction={() => setDialogOpen(true)}
+        />
       ) : viewMode === "grid" ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {filteredAssets.map((asset, index) => (
@@ -578,6 +1035,12 @@ export default function ActivosPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2 pt-2 border-t">
+                    <input
+                      type="checkbox"
+                      checked={selectedAssetIds.includes(asset.id)}
+                      onChange={() => toggleSelectedAsset(asset.id)}
+                      className="h-4 w-4 rounded border-input text-primary focus:ring-ring"
+                    />
                     <Button variant="outline" size="sm" className="flex-1">
                       <Eye className="h-4 w-4 mr-1" /> Ver
                     </Button>
@@ -616,33 +1079,60 @@ export default function ActivosPage() {
         </div>
       ) : (
         <Card>
-          <div className="overflow-x-auto">
-            <table className="w-full">
+          <div className="overflow-x-auto max-h-[65vh]">
+            <table className="w-full min-w-[940px]">
               <thead>
-                <tr className="border-b bg-muted/50">
-                  <th className="text-left p-4 font-medium text-sm">Código</th>
-                  <th className="text-left p-4 font-medium text-sm">Nombre</th>
-                  <th className="text-left p-4 font-medium text-sm">Categoría</th>
-                  <th className="text-left p-4 font-medium text-sm">Estado</th>
-                  <th className="text-left p-4 font-medium text-sm">Valor</th>
-                  <th className="text-right p-4 font-medium text-sm">Acciones</th>
+                <tr className="border-b bg-muted/60 backdrop-blur-sm">
+                  <th className="sticky top-0 text-left p-4 bg-muted/80">
+                    <input
+                      type="checkbox"
+                      checked={
+                        filteredAssets.length > 0 &&
+                        filteredAssets.every((asset) => selectedAssetIds.includes(asset.id))
+                      }
+                      onChange={toggleAllFilteredAssets}
+                      className="h-4 w-4 rounded border-input text-primary focus:ring-ring"
+                    />
+                  </th>
+                  {selectedColumns.includes("code") && <th className="sticky top-0 text-left p-4 font-semibold text-xs uppercase tracking-[0.08em] text-muted-foreground bg-muted/80">Codigo</th>}
+                  {selectedColumns.includes("name") && <th className="sticky top-0 text-left p-4 font-semibold text-xs uppercase tracking-[0.08em] text-muted-foreground bg-muted/80">Nombre</th>}
+                  {selectedColumns.includes("category") && <th className="sticky top-0 text-left p-4 font-semibold text-xs uppercase tracking-[0.08em] text-muted-foreground bg-muted/80">Categoria</th>}
+                  {selectedColumns.includes("status") && <th className="sticky top-0 text-left p-4 font-semibold text-xs uppercase tracking-[0.08em] text-muted-foreground bg-muted/80">Estado</th>}
+                  {selectedColumns.includes("value") && <th className="sticky top-0 text-left p-4 font-semibold text-xs uppercase tracking-[0.08em] text-muted-foreground bg-muted/80">Valor</th>}
+                  {selectedColumns.includes("owner") && <th className="sticky top-0 text-left p-4 font-semibold text-xs uppercase tracking-[0.08em] text-muted-foreground bg-muted/80">Responsable</th>}
+                  <th className="sticky top-0 text-right p-4 font-semibold text-xs uppercase tracking-[0.08em] text-muted-foreground bg-muted/80">Acciones</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredAssets.map((asset) => (
-                  <tr key={asset.id} className="border-b hover:bg-muted/30">
-                    <td className="p-4 text-sm font-mono">{asset.qrCode || asset.id.slice(0, 8)}</td>
+                {filteredAssets.map((asset, index) => (
+                  <tr
+                    key={asset.id}
+                    className={cn(
+                      "border-b transition-colors hover:bg-muted/40",
+                      index % 2 === 0 ? "bg-background" : "bg-muted/10"
+                    )}
+                  >
                     <td className="p-4">
+                      <input
+                        type="checkbox"
+                        checked={selectedAssetIds.includes(asset.id)}
+                        onChange={() => toggleSelectedAsset(asset.id)}
+                        className="h-4 w-4 rounded border-input text-primary focus:ring-ring"
+                      />
+                    </td>
+                    {selectedColumns.includes("code") && <td className="p-4 text-sm font-mono">{asset.qrCode || asset.id.slice(0, 8)}</td>}
+                    {selectedColumns.includes("name") && <td className="p-4">
                       <p className="font-medium">{asset.name}</p>
                       <p className="text-xs text-muted-foreground">{asset.brand} {asset.model}</p>
-                    </td>
-                    <td className="p-4 text-sm">{asset.category.icon} {asset.category.name}</td>
-                    <td className="p-4">
+                    </td>}
+                    {selectedColumns.includes("category") && <td className="p-4 text-sm">{asset.category.icon} {asset.category.name}</td>}
+                    {selectedColumns.includes("status") && <td className="p-4">
                       <Badge variant={statusConfig[asset.status]?.variant}>
                         {statusConfig[asset.status]?.label}
                       </Badge>
-                    </td>
-                    <td className="p-4 text-sm font-medium">{formatCurrency(asset.currentValue)}</td>
+                    </td>}
+                    {selectedColumns.includes("value") && <td className="p-4 text-sm font-medium">{formatCurrency(asset.currentValue)}</td>}
+                    {selectedColumns.includes("owner") && <td className="p-4 text-sm">{asset.securityUser.name} {asset.securityUser.lastName}</td>}
                     <td className="p-4">
                       <div className="flex items-center justify-end gap-1">
                         <Button variant="ghost" size="icon" className="h-8 w-8">
@@ -665,6 +1155,35 @@ export default function ActivosPage() {
           </div>
         </Card>
       )}
+
+      <Dialog open={saveViewDialogOpen} onOpenChange={setSaveViewDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Guardar vista</DialogTitle>
+            <DialogDescription>
+              Guarda filtros y modo actual para reutilizarlos rapido.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 py-2">
+            <Label htmlFor="view-name">Nombre de la vista</Label>
+            <Input
+              id="view-name"
+              placeholder="Ej: Activos en mantenimiento"
+              value={newViewName}
+              onChange={(event) => setNewViewName(event.target.value)}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSaveViewDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={handleSaveCurrentView}>
+              <Save className="h-4 w-4 mr-2" />
+              Guardar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
         <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
@@ -817,6 +1336,16 @@ export default function ActivosPage() {
         confirmLabel="Eliminar"
         onConfirm={handleDeleteAsset}
         loading={actionLoading}
+      />
+
+      <ConfirmActionDialog
+        open={bulkDeleteDialogOpen}
+        onOpenChange={setBulkDeleteDialogOpen}
+        title="Eliminar activos seleccionados"
+        description={`Se eliminaran ${selectedAssetIds.length} activos seleccionados. Esta accion no se puede deshacer.`}
+        confirmLabel="Eliminar seleccionados"
+        onConfirm={handleBulkDelete}
+        loading={bulkDeleting}
       />
     </motion.div>
   );

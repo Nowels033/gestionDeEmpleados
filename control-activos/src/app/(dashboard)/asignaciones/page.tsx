@@ -23,7 +23,9 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Loading } from "@/components/ui/loading";
+import { EmptyState } from "@/components/ui/empty-state";
 import { ConfirmActionDialog } from "@/components/ui/confirm-action-dialog";
+import { DashboardPageHeader } from "@/components/layout/dashboard-page-header";
 import {
   Dialog,
   DialogContent,
@@ -49,6 +51,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useFetch } from "@/lib/hooks/use-fetch";
+import { downloadCsv } from "@/lib/csv";
 import toast from "react-hot-toast";
 
 interface Assignment {
@@ -104,6 +107,8 @@ const statusColors: Record<
 };
 
 export default function AsignacionesPage() {
+  const FILTERS_STORAGE_KEY = "asignaciones.filters.v1";
+
   const {
     data: assignments,
     loading,
@@ -122,7 +127,10 @@ export default function AsignacionesPage() {
   const [transferDialogOpen, setTransferDialogOpen] = React.useState(false);
   const [editDialogOpen, setEditDialogOpen] = React.useState(false);
   const [actionLoading, setActionLoading] = React.useState(false);
+  const [bulkLoading, setBulkLoading] = React.useState(false);
+  const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = React.useState(false);
   const [selectedAssignment, setSelectedAssignment] = React.useState<Assignment | null>(null);
+  const [selectedAssignmentIds, setSelectedAssignmentIds] = React.useState<string[]>([]);
   const [editData, setEditData] = React.useState({
     type: "PERSONAL" as "PERSONAL" | "DEPARTAMENTAL",
     status: "ACTIVE" as "ACTIVE" | "RETURNED" | "TRANSFERRED",
@@ -144,6 +152,50 @@ export default function AsignacionesPage() {
   });
 
   const availableAssets = assets.filter((asset) => asset.status === "AVAILABLE");
+
+  const [filtersHydrated, setFiltersHydrated] = React.useState(false);
+
+  React.useEffect(() => {
+    if (filtersHydrated) {
+      return;
+    }
+
+    try {
+      const raw = localStorage.getItem(FILTERS_STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as {
+          searchQuery?: string;
+          statusFilter?: string;
+          typeFilter?: string;
+        };
+
+        if (typeof parsed.searchQuery === "string") {
+          setSearchQuery(parsed.searchQuery);
+        }
+        if (typeof parsed.statusFilter === "string") {
+          setStatusFilter(parsed.statusFilter);
+        }
+        if (typeof parsed.typeFilter === "string") {
+          setTypeFilter(parsed.typeFilter);
+        }
+      }
+    } catch {
+      // noop
+    } finally {
+      setFiltersHydrated(true);
+    }
+  }, [filtersHydrated]);
+
+  React.useEffect(() => {
+    if (!filtersHydrated) {
+      return;
+    }
+
+    localStorage.setItem(
+      FILTERS_STORAGE_KEY,
+      JSON.stringify({ searchQuery, statusFilter, typeFilter })
+    );
+  }, [filtersHydrated, searchQuery, statusFilter, typeFilter]);
 
   const filteredAssignments = assignments.filter((assignment) => {
     const searchText = searchQuery.toLowerCase();
@@ -380,6 +432,153 @@ export default function AsignacionesPage() {
     }
   };
 
+  const toggleSelectedAssignment = (assignmentId: string) => {
+    setSelectedAssignmentIds((prev) =>
+      prev.includes(assignmentId)
+        ? prev.filter((id) => id !== assignmentId)
+        : [...prev, assignmentId]
+    );
+  };
+
+  const allFilteredSelected =
+    filteredAssignments.length > 0 &&
+    filteredAssignments.every((assignment) => selectedAssignmentIds.includes(assignment.id));
+
+  const toggleAllFilteredAssignments = () => {
+    const visibleIds = filteredAssignments.map((assignment) => assignment.id);
+    if (allFilteredSelected) {
+      setSelectedAssignmentIds((prev) => prev.filter((id) => !visibleIds.includes(id)));
+      return;
+    }
+    setSelectedAssignmentIds((prev) => Array.from(new Set([...prev, ...visibleIds])));
+  };
+
+  const handleBulkStatusUpdate = async (status: "ACTIVE" | "RETURNED" | "TRANSFERRED") => {
+    if (selectedAssignmentIds.length === 0) {
+      return;
+    }
+
+    try {
+      setBulkLoading(true);
+      const results = await Promise.all(
+        selectedAssignmentIds.map(async (assignmentId) => {
+          const response = await fetch(`/api/asignaciones/${assignmentId}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ status }),
+          });
+          return response.ok;
+        })
+      );
+
+      const successCount = results.filter(Boolean).length;
+      const failedCount = results.length - successCount;
+
+      if (successCount > 0) {
+        toast.success(`${successCount} asignaciones actualizadas`);
+      }
+      if (failedCount > 0) {
+        toast.error(`${failedCount} asignaciones no pudieron actualizarse`);
+      }
+
+      refetch();
+    } catch {
+      toast.error("No fue posible actualizar asignaciones seleccionadas");
+    } finally {
+      setBulkLoading(false);
+    }
+  };
+
+  const openBulkDeleteDialog = () => {
+    if (selectedAssignmentIds.length === 0) {
+      return;
+    }
+    setBulkDeleteDialogOpen(true);
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedAssignmentIds.length === 0) {
+      return;
+    }
+
+    try {
+      setBulkLoading(true);
+      const results = await Promise.all(
+        selectedAssignmentIds.map(async (assignmentId) => {
+          const response = await fetch(`/api/asignaciones/${assignmentId}`, {
+            method: "DELETE",
+          });
+          return response.ok;
+        })
+      );
+
+      const successCount = results.filter(Boolean).length;
+      const failedCount = results.length - successCount;
+
+      if (successCount > 0) {
+        toast.success(`${successCount} asignaciones eliminadas`);
+      }
+      if (failedCount > 0) {
+        toast.error(`${failedCount} asignaciones no pudieron eliminarse`);
+      }
+
+      setSelectedAssignmentIds([]);
+      setBulkDeleteDialogOpen(false);
+      refetch();
+    } catch {
+      toast.error("No fue posible eliminar asignaciones seleccionadas");
+    } finally {
+      setBulkLoading(false);
+    }
+  };
+
+  const handleExportCsv = () => {
+    downloadCsv(
+      filteredAssignments,
+      [
+        { key: "id", header: "ID" },
+        { key: "type", header: "Tipo" },
+        { key: "status", header: "Estado" },
+        { key: "asset", header: "Activo", map: (a) => a.asset.name },
+        {
+          key: "destino",
+          header: "Destino",
+          map: (a) =>
+            a.user
+              ? `${a.user.name} ${a.user.lastName}`
+              : a.department?.name || "Sin destino",
+        },
+        { key: "assignedAt", header: "Fecha Asignacion" },
+        { key: "notes", header: "Notas", map: (a) => a.notes || "" },
+      ],
+      `asignaciones-${new Date().toISOString().slice(0, 10)}.csv`
+    );
+    toast.success("CSV exportado correctamente");
+  };
+
+  React.useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey) || !event.shiftKey) {
+        return;
+      }
+
+      const key = event.key.toLowerCase();
+      if (key === "a") {
+        event.preventDefault();
+        toggleAllFilteredAssignments();
+      }
+
+      if (key === "e") {
+        event.preventDefault();
+        handleExportCsv();
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filteredAssignments, selectedAssignmentIds]);
+
   if (loading) {
     return <Loading text="Cargando asignaciones..." />;
   }
@@ -390,20 +589,23 @@ export default function AsignacionesPage() {
       animate={{ opacity: 1, y: 0 }}
       className="space-y-6"
     >
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Asignaciones</h1>
-          <p className="text-muted-foreground">
-            Gestiona las asignaciones de activos a usuarios y departamentos
-          </p>
-        </div>
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="h-4 w-4 mr-2" />
-              Nueva Asignacion
-            </Button>
-          </DialogTrigger>
+      <DashboardPageHeader
+        eyebrow="Operacion"
+        title="Asignaciones"
+        description="Gestiona las asignaciones de activos a usuarios y departamentos"
+        actions={
+          <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={handleExportCsv}>
+            <FileDown className="h-4 w-4 mr-2" />
+            Exportar CSV
+          </Button>
+          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+            <DialogTrigger asChild>
+              <Button>
+                <Plus className="h-4 w-4 mr-2" />
+                Nueva Asignacion
+              </Button>
+            </DialogTrigger>
           <DialogContent className="sm:max-w-[500px]">
             <DialogHeader>
               <DialogTitle>Nueva Asignacion</DialogTitle>
@@ -526,9 +728,11 @@ export default function AsignacionesPage() {
                 {submitting ? "Asignando..." : "Asignar"}
               </Button>
             </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      </div>
+            </DialogContent>
+          </Dialog>
+          </div>
+        }
+      />
 
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
         <div className="relative flex-1">
@@ -561,10 +765,58 @@ export default function AsignacionesPage() {
             <SelectItem value="DEPARTAMENTAL">Departamental</SelectItem>
           </SelectContent>
         </Select>
+        <Button variant="outline" onClick={toggleAllFilteredAssignments}>
+          {allFilteredSelected ? "Quitar visibles" : "Seleccionar visibles"}
+        </Button>
       </div>
 
+      {selectedAssignmentIds.length > 0 && (
+        <div className="fixed bottom-4 left-4 right-4 z-30 flex flex-wrap items-center gap-2 rounded-xl border border-border/70 bg-background/95 px-3 py-2 text-sm shadow-lg backdrop-blur md:left-auto md:right-6 md:max-w-fit">
+          <span className="font-medium">{selectedAssignmentIds.length} seleccionadas</span>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => handleBulkStatusUpdate("ACTIVE")}
+            disabled={bulkLoading}
+          >
+            Marcar activas
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => handleBulkStatusUpdate("RETURNED")}
+            disabled={bulkLoading}
+          >
+            Marcar devueltas
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => handleBulkStatusUpdate("TRANSFERRED")}
+            disabled={bulkLoading}
+          >
+            Marcar transferidas
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => setSelectedAssignmentIds([])}>
+            Limpiar
+          </Button>
+          <Button variant="destructive" size="sm" onClick={openBulkDeleteDialog} disabled={bulkLoading}>
+            Eliminar
+          </Button>
+        </div>
+      )}
+
       <div className="space-y-3">
-        {filteredAssignments.map((assignment, index) => {
+        {filteredAssignments.length === 0 ? (
+          <EmptyState
+            icon={ArrowLeftRight}
+            title="Sin asignaciones"
+            description="No hay resultados con los filtros actuales. Puedes crear una nueva asignacion."
+            actionLabel="Nueva asignacion"
+            onAction={() => setDialogOpen(true)}
+          />
+        ) : (
+        filteredAssignments.map((assignment, index) => {
           const StatusIcon = statusColors[assignment.status].icon;
           return (
             <motion.div
@@ -613,6 +865,12 @@ export default function AsignacionesPage() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
+                      <input
+                        type="checkbox"
+                        checked={selectedAssignmentIds.includes(assignment.id)}
+                        onChange={() => toggleSelectedAssignment(assignment.id)}
+                        className="h-4 w-4 rounded border-input text-primary focus:ring-ring"
+                      />
                       <Button variant="outline" size="sm">
                         <Eye className="h-4 w-4 mr-1" />
                         Ver
@@ -648,7 +906,7 @@ export default function AsignacionesPage() {
               </Card>
             </motion.div>
           );
-        })}
+        }))}
       </div>
 
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
@@ -863,6 +1121,16 @@ export default function AsignacionesPage() {
         confirmLabel="Devolver"
         onConfirm={handleReturnAssignment}
         loading={actionLoading}
+      />
+
+      <ConfirmActionDialog
+        open={bulkDeleteDialogOpen}
+        onOpenChange={setBulkDeleteDialogOpen}
+        title="Eliminar asignaciones seleccionadas"
+        description={`Se eliminaran ${selectedAssignmentIds.length} asignaciones seleccionadas. Esta accion no se puede deshacer.`}
+        confirmLabel="Eliminar seleccionadas"
+        onConfirm={handleBulkDelete}
+        loading={bulkLoading}
       />
 
       <div className="grid gap-4 md:grid-cols-4">

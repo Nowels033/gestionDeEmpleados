@@ -19,6 +19,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Loading } from "@/components/ui/loading";
 import { ConfirmActionDialog } from "@/components/ui/confirm-action-dialog";
+import { DashboardPageHeader } from "@/components/layout/dashboard-page-header";
 import {
   Dialog,
   DialogContent,
@@ -295,12 +296,12 @@ export default function MantenimientoPage() {
       animate={{ opacity: 1, y: 0 }}
       className="space-y-6"
     >
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Mantenimiento</h1>
-          <p className="text-muted-foreground">Programa y gestiona el mantenimiento de activos</p>
-        </div>
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+      <DashboardPageHeader
+        eyebrow="Soporte"
+        title="Mantenimiento"
+        description="Programa y gestiona el mantenimiento de activos"
+        actions={
+          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
             <Button>
               <Plus className="h-4 w-4 mr-2" />
@@ -425,7 +426,8 @@ export default function MantenimientoPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
-      </div>
+        }
+      />
 
       <div className="space-y-3">
         {maintenanceLogs.map((log, index) => (

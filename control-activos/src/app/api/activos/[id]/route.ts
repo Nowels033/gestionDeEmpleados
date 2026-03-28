@@ -71,9 +71,33 @@ export async function DELETE(
     }
 
     const { id } = await params;
-    await prisma.asset.delete({ where: { id } });
+    const assetExists = await prisma.asset.findUnique({
+      where: { id },
+      select: { id: true, name: true },
+    });
+
+    if (!assetExists) {
+      return NextResponse.json({ error: "Activo no encontrado" }, { status: 404 });
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.assignment.deleteMany({ where: { assetId: id } });
+      await tx.maintenanceLog.deleteMany({ where: { assetId: id } });
+      await tx.contract.deleteMany({ where: { assetId: id } });
+      await tx.auditLog.deleteMany({ where: { entity: "asset", entityId: id } });
+      await tx.assetPhoto.deleteMany({ where: { assetId: id } });
+      await tx.asset.delete({ where: { id } });
+    });
+
     return NextResponse.json({ ok: true });
   } catch (error) {
+    if (typeof error === "object" && error !== null && "code" in error && error.code === "P2003") {
+      return NextResponse.json(
+        { error: "No se pudo eliminar el activo por relaciones dependientes" },
+        { status: 409 }
+      );
+    }
+
     if (typeof error === "object" && error !== null && "code" in error && error.code === "P2025") {
       return NextResponse.json({ error: "Activo no encontrado" }, { status: 404 });
     }

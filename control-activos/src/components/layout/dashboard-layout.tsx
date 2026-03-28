@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { signOut } from "next-auth/react";
 import {
@@ -17,6 +17,7 @@ import {
   FileDown,
   Bot,
   Settings,
+  Search,
   Menu,
   X,
   Moon,
@@ -37,6 +38,13 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Separator } from "@/components/ui/separator";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 const navItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -57,13 +65,68 @@ interface DashboardLayoutProps {
 
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const pathname = usePathname();
+  const router = useRouter();
   const { theme, setTheme } = useTheme();
   const [sidebarOpen, setSidebarOpen] = React.useState(false);
   const [mounted, setMounted] = React.useState(false);
+  const [searchOpen, setSearchOpen] = React.useState(false);
+  const [searchQuery, setSearchQuery] = React.useState("");
+
+  const currentSection = React.useMemo(() => {
+    const activeItem = navItems.find((item) => item.href === pathname);
+    if (activeItem) {
+      return activeItem.label;
+    }
+
+    if (pathname === "/") {
+      return "Dashboard";
+    }
+
+    return pathname
+      .replace(/^\//, "")
+      .split("/")
+      .filter(Boolean)
+      .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+      .join(" / ");
+  }, [pathname]);
 
   React.useEffect(() => {
     setMounted(true);
   }, []);
+
+  React.useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setSearchOpen((prev) => !prev);
+      }
+      if (event.key === "Escape") {
+        setSearchOpen(false);
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
+  const filteredNavItems = React.useMemo(() => {
+    const normalized = searchQuery.trim().toLowerCase();
+    if (!normalized) {
+      return navItems;
+    }
+
+    return navItems.filter(
+      (item) =>
+        item.label.toLowerCase().includes(normalized) ||
+        item.href.toLowerCase().includes(normalized)
+    );
+  }, [searchQuery]);
+
+  const handleNavigate = (href: string) => {
+    setSearchOpen(false);
+    setSearchQuery("");
+    router.push(href);
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -74,7 +137,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-40 bg-black/50 lg:hidden"
+            className="fixed inset-0 z-40 bg-black/35 backdrop-blur-sm lg:hidden"
             onClick={() => setSidebarOpen(false)}
           />
         )}
@@ -83,17 +146,17 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       {/* Sidebar */}
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-50 w-72 bg-sidebar border-r transform transition-transform duration-300 ease-in-out lg:translate-x-0",
+          "fixed inset-y-0 left-0 z-50 w-72 bg-sidebar/95 border-r border-border/70 backdrop-blur-md transform transition-transform duration-300 ease-in-out lg:translate-x-0",
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
         <div className="flex flex-col h-full">
           {/* Logo */}
-          <div className="flex items-center justify-between h-16 px-6 border-b">
+          <div className="flex items-center justify-between h-16 px-6 border-b border-border/70">
             <Link href="/" className="flex items-center gap-3">
-              <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-primary text-primary-foreground font-bold text-lg">
-                CA
-              </div>
+                <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-primary text-primary-foreground font-bold text-lg shadow-md shadow-primary/30">
+                  CA
+                </div>
               <div className="flex flex-col">
                 <span className="font-semibold text-sm">Control de Activos</span>
                 <span className="text-xs text-muted-foreground">v1.0.0</span>
@@ -121,8 +184,8 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                   className={cn(
                     "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200",
                     isActive
-                      ? "bg-primary text-primary-foreground shadow-md"
-                      : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                      ? "bg-primary text-primary-foreground shadow-md shadow-primary/30"
+                      : "text-muted-foreground hover:bg-accent/70 hover:text-accent-foreground"
                   )}
                 >
                   <item.icon className="h-5 w-5" />
@@ -158,7 +221,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       {/* Main content */}
       <div className="lg:pl-72">
         {/* Top navbar */}
-        <header className="sticky top-0 z-30 flex items-center justify-between h-16 px-4 lg:px-8 bg-background/80 backdrop-blur-sm border-b">
+        <header className="sticky top-0 z-30 flex items-center justify-between h-16 px-4 lg:px-8 bg-background/70 backdrop-blur-md border-b border-border/70">
           <div className="flex items-center gap-4">
             <Button
               variant="ghost"
@@ -170,11 +233,20 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             </Button>
 
             {/* Search bar */}
-            <div className="hidden sm:flex items-center gap-2 px-4 py-2 rounded-lg bg-muted/50 text-muted-foreground text-sm w-64">
-              <span>Buscar...</span>
+            <button
+              type="button"
+              className="hidden sm:flex items-center gap-2 px-4 py-2 rounded-lg bg-muted/60 text-muted-foreground text-sm w-64 text-left transition-colors hover:bg-muted"
+              onClick={() => setSearchOpen(true)}
+            >
+              <Search className="h-4 w-4" />
+              <span className="flex-1">Buscar modulo...</span>
               <kbd className="pointer-events-none inline-flex h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground">
                 <span className="text-xs">⌘</span>K
               </kbd>
+            </button>
+            <div className="hidden lg:block ml-2">
+              <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground/80">Seccion</p>
+              <p className="text-sm font-semibold text-foreground">{currentSection}</p>
             </div>
           </div>
 
@@ -259,9 +331,51 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
         {/* Page content */}
         <main className="p-4 lg:p-8">
-          {children}
+          <div className="app-surface p-4 lg:p-6">{children}</div>
         </main>
       </div>
+
+      <Dialog open={searchOpen} onOpenChange={setSearchOpen}>
+        <DialogContent className="sm:max-w-[560px]">
+          <DialogHeader>
+            <DialogTitle>Buscador global</DialogTitle>
+            <DialogDescription>Encuentra y abre cualquier modulo rapido.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <input
+                autoFocus
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder="Escribe: activos, usuarios, reportes..."
+                className="flex h-11 w-full rounded-lg border border-input bg-background px-10 py-2 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              />
+            </div>
+            <div className="max-h-72 overflow-y-auto rounded-lg border border-border/70">
+              {filteredNavItems.length === 0 ? (
+                <p className="p-4 text-sm text-muted-foreground">No se encontraron modulos.</p>
+              ) : (
+                <ul className="divide-y divide-border/60">
+                  {filteredNavItems.map((item) => (
+                    <li key={item.href}>
+                      <button
+                        type="button"
+                        onClick={() => handleNavigate(item.href)}
+                        className="flex w-full items-center gap-3 p-3 text-left transition-colors hover:bg-muted/60"
+                      >
+                        <item.icon className="h-4 w-4 text-primary" />
+                        <span className="font-medium">{item.label}</span>
+                        <span className="ml-auto text-xs text-muted-foreground">{item.href}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -4,6 +4,8 @@ import * as React from "react";
 import { motion } from "framer-motion";
 import {
   Plus,
+  Search,
+  FileDown,
   Calendar,
   DollarSign,
   Building2,
@@ -21,6 +23,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Loading } from "@/components/ui/loading";
 import { ConfirmActionDialog } from "@/components/ui/confirm-action-dialog";
+import { DashboardPageHeader } from "@/components/layout/dashboard-page-header";
 import {
   Dialog,
   DialogContent,
@@ -47,6 +50,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useFetch } from "@/lib/hooks/use-fetch";
+import { downloadCsv } from "@/lib/csv";
 import toast from "react-hot-toast";
 
 interface Contract {
@@ -101,6 +105,8 @@ const statusColors: Record<
 };
 
 export default function ContratosPage() {
+  const FILTERS_STORAGE_KEY = "contratos.filters.v1";
+
   const { data: contracts, loading, refetch } = useFetch<Contract[]>("/api/contratos", []);
   const { data: assets } = useFetch<AssetOption[]>("/api/activos", []);
   const { data: departments } = useFetch<DepartmentOption[]>("/api/departamentos", []);
@@ -110,7 +116,14 @@ export default function ContratosPage() {
   const [editDialogOpen, setEditDialogOpen] = React.useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false);
   const [actionLoading, setActionLoading] = React.useState(false);
+  const [bulkLoading, setBulkLoading] = React.useState(false);
+  const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = React.useState(false);
   const [selectedContract, setSelectedContract] = React.useState<Contract | null>(null);
+  const [selectedContractIds, setSelectedContractIds] = React.useState<string[]>([]);
+  const [searchQuery, setSearchQuery] = React.useState("");
+  const [statusFilter, setStatusFilter] = React.useState("all");
+  const [typeFilter, setTypeFilter] = React.useState("all");
+  const [filtersHydrated, setFiltersHydrated] = React.useState(false);
   const [editFormData, setEditFormData] = React.useState({
     name: "",
     type: "SERVICE" as
@@ -156,6 +169,59 @@ export default function ContratosPage() {
       return { ...contract, daysUntilExpiry };
     });
   }, [contracts]);
+
+  React.useEffect(() => {
+    if (filtersHydrated) {
+      return;
+    }
+
+    try {
+      const raw = localStorage.getItem(FILTERS_STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as {
+          searchQuery?: string;
+          statusFilter?: string;
+          typeFilter?: string;
+        };
+
+        if (typeof parsed.searchQuery === "string") {
+          setSearchQuery(parsed.searchQuery);
+        }
+        if (typeof parsed.statusFilter === "string") {
+          setStatusFilter(parsed.statusFilter);
+        }
+        if (typeof parsed.typeFilter === "string") {
+          setTypeFilter(parsed.typeFilter);
+        }
+      }
+    } catch {
+      // noop
+    } finally {
+      setFiltersHydrated(true);
+    }
+  }, [filtersHydrated]);
+
+  React.useEffect(() => {
+    if (!filtersHydrated) {
+      return;
+    }
+
+    localStorage.setItem(
+      FILTERS_STORAGE_KEY,
+      JSON.stringify({ searchQuery, statusFilter, typeFilter })
+    );
+  }, [filtersHydrated, searchQuery, statusFilter, typeFilter]);
+
+  const filteredContracts = contractsWithExpiry.filter((contract) => {
+    const normalized = searchQuery.toLowerCase();
+    const matchesSearch =
+      contract.name.toLowerCase().includes(normalized) ||
+      contract.provider.toLowerCase().includes(normalized) ||
+      (contract.asset?.name.toLowerCase().includes(normalized) ?? false);
+    const matchesStatus = statusFilter === "all" || contract.status === statusFilter;
+    const matchesType = typeFilter === "all" || contract.type === typeFilter;
+    return matchesSearch && matchesStatus && matchesType;
+  });
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("es-MX", {
@@ -313,6 +379,7 @@ export default function ContratosPage() {
       toast.success("Contrato eliminado");
       setDeleteDialogOpen(false);
       setSelectedContract(null);
+      setSelectedContractIds((prev) => prev.filter((id) => id !== selectedContract.id));
       refetch();
     } catch {
       toast.error("No fue posible eliminar");
@@ -320,6 +387,149 @@ export default function ContratosPage() {
       setActionLoading(false);
     }
   };
+
+  const toggleSelectedContract = (contractId: string) => {
+    setSelectedContractIds((prev) =>
+      prev.includes(contractId) ? prev.filter((id) => id !== contractId) : [...prev, contractId]
+    );
+  };
+
+  const allFilteredSelected =
+    filteredContracts.length > 0 &&
+    filteredContracts.every((contract) => selectedContractIds.includes(contract.id));
+
+  const toggleAllFilteredContracts = () => {
+    const visibleIds = filteredContracts.map((contract) => contract.id);
+    if (allFilteredSelected) {
+      setSelectedContractIds((prev) => prev.filter((id) => !visibleIds.includes(id)));
+      return;
+    }
+    setSelectedContractIds((prev) => Array.from(new Set([...prev, ...visibleIds])));
+  };
+
+  const handleBulkStatusUpdate = async (
+    status: "ACTIVE" | "EXPIRED" | "CANCELLED" | "RENEWED"
+  ) => {
+    if (selectedContractIds.length === 0) {
+      return;
+    }
+
+    try {
+      setBulkLoading(true);
+      const results = await Promise.all(
+        selectedContractIds.map(async (contractId) => {
+          const response = await fetch(`/api/contratos/${contractId}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ status }),
+          });
+          return response.ok;
+        })
+      );
+
+      const successCount = results.filter(Boolean).length;
+      const failedCount = results.length - successCount;
+
+      if (successCount > 0) {
+        toast.success(`${successCount} contratos actualizados`);
+      }
+      if (failedCount > 0) {
+        toast.error(`${failedCount} contratos no pudieron actualizarse`);
+      }
+
+      refetch();
+    } catch {
+      toast.error("No fue posible actualizar contratos seleccionados");
+    } finally {
+      setBulkLoading(false);
+    }
+  };
+
+  const openBulkDeleteDialog = () => {
+    if (selectedContractIds.length === 0) {
+      return;
+    }
+    setBulkDeleteDialogOpen(true);
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedContractIds.length === 0) {
+      return;
+    }
+
+    try {
+      setBulkLoading(true);
+      const results = await Promise.all(
+        selectedContractIds.map(async (contractId) => {
+          const response = await fetch(`/api/contratos/${contractId}`, {
+            method: "DELETE",
+          });
+          return response.ok;
+        })
+      );
+
+      const successCount = results.filter(Boolean).length;
+      const failedCount = results.length - successCount;
+
+      if (successCount > 0) {
+        toast.success(`${successCount} contratos eliminados`);
+      }
+      if (failedCount > 0) {
+        toast.error(`${failedCount} contratos no pudieron eliminarse`);
+      }
+
+      setSelectedContractIds([]);
+      setSelectedContract(null);
+      setBulkDeleteDialogOpen(false);
+      refetch();
+    } catch {
+      toast.error("No fue posible eliminar contratos seleccionados");
+    } finally {
+      setBulkLoading(false);
+    }
+  };
+
+  const handleExportCsv = () => {
+    downloadCsv(
+      filteredContracts,
+      [
+        { key: "name", header: "Nombre" },
+        { key: "type", header: "Tipo" },
+        { key: "status", header: "Estado" },
+        { key: "provider", header: "Proveedor" },
+        { key: "startDate", header: "Fecha Inicio" },
+        { key: "endDate", header: "Fecha Fin" },
+        { key: "value", header: "Valor", map: (c) => c.value ?? "" },
+        { key: "asset", header: "Activo", map: (c) => c.asset?.name || "" },
+        { key: "department", header: "Departamento", map: (c) => c.department?.name || "" },
+      ],
+      `contratos-${new Date().toISOString().slice(0, 10)}.csv`
+    );
+    toast.success("CSV exportado correctamente");
+  };
+
+  React.useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey) || !event.shiftKey) {
+        return;
+      }
+
+      const key = event.key.toLowerCase();
+      if (key === "a") {
+        event.preventDefault();
+        toggleAllFilteredContracts();
+      }
+
+      if (key === "e") {
+        event.preventDefault();
+        handleExportCsv();
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filteredContracts, selectedContractIds]);
 
   if (loading) {
     return <Loading text="Cargando contratos..." />;
@@ -331,20 +541,23 @@ export default function ContratosPage() {
       animate={{ opacity: 1, y: 0 }}
       className="space-y-6"
     >
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Contratos y Licencias</h1>
-          <p className="text-muted-foreground">
-            Gestiona contratos de servicio, garantias, seguros y licencias
-          </p>
-        </div>
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="h-4 w-4 mr-2" />
-              Nuevo Contrato
-            </Button>
-          </DialogTrigger>
+      <DashboardPageHeader
+        eyebrow="Legal"
+        title="Contratos y Licencias"
+        description="Gestiona contratos de servicio, garantias, seguros y licencias"
+        actions={
+          <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={handleExportCsv}>
+            <FileDown className="h-4 w-4 mr-2" />
+            Exportar CSV
+          </Button>
+          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+            <DialogTrigger asChild>
+              <Button>
+                <Plus className="h-4 w-4 mr-2" />
+                Nuevo Contrato
+              </Button>
+            </DialogTrigger>
           <DialogContent className="sm:max-w-[500px]">
             <DialogHeader>
               <DialogTitle>Nuevo Contrato</DialogTitle>
@@ -500,12 +713,99 @@ export default function ContratosPage() {
                 {submitting ? "Guardando..." : "Guardar"}
               </Button>
             </DialogFooter>
-          </DialogContent>
-        </Dialog>
+            </DialogContent>
+          </Dialog>
+          </div>
+        }
+      />
+
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Buscar por nombre, proveedor o activo..."
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            className="pl-10"
+          />
+        </div>
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="w-[170px]">
+            <SelectValue placeholder="Estado" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos</SelectItem>
+            <SelectItem value="ACTIVE">Activo</SelectItem>
+            <SelectItem value="EXPIRED">Vencido</SelectItem>
+            <SelectItem value="CANCELLED">Cancelado</SelectItem>
+            <SelectItem value="RENEWED">Renovado</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={typeFilter} onValueChange={setTypeFilter}>
+          <SelectTrigger className="w-[170px]">
+            <SelectValue placeholder="Tipo" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos</SelectItem>
+            <SelectItem value="SERVICE">Servicio</SelectItem>
+            <SelectItem value="WARRANTY">Garantia</SelectItem>
+            <SelectItem value="INSURANCE">Seguro</SelectItem>
+            <SelectItem value="LEASE">Arrendamiento</SelectItem>
+            <SelectItem value="LICENSE">Licencia</SelectItem>
+            <SelectItem value="MAINTENANCE">Mantenimiento</SelectItem>
+          </SelectContent>
+        </Select>
+        <Button variant="outline" onClick={toggleAllFilteredContracts}>
+          {allFilteredSelected ? "Quitar visibles" : "Seleccionar visibles"}
+        </Button>
       </div>
 
+      {selectedContractIds.length > 0 && (
+        <div className="fixed bottom-4 left-4 right-4 z-30 flex flex-wrap items-center gap-2 rounded-xl border border-border/70 bg-background/95 px-3 py-2 text-sm shadow-lg backdrop-blur md:left-auto md:right-6 md:max-w-fit">
+          <span className="font-medium">{selectedContractIds.length} seleccionados</span>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => handleBulkStatusUpdate("ACTIVE")}
+            disabled={bulkLoading}
+          >
+            Activo
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => handleBulkStatusUpdate("EXPIRED")}
+            disabled={bulkLoading}
+          >
+            Vencido
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => handleBulkStatusUpdate("RENEWED")}
+            disabled={bulkLoading}
+          >
+            Renovado
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => handleBulkStatusUpdate("CANCELLED")}
+            disabled={bulkLoading}
+          >
+            Cancelado
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => setSelectedContractIds([])}>
+            Limpiar
+          </Button>
+          <Button variant="destructive" size="sm" onClick={openBulkDeleteDialog} disabled={bulkLoading}>
+            Eliminar
+          </Button>
+        </div>
+      )}
+
       <div className="space-y-3">
-        {contractsWithExpiry.map((contract, index) => (
+        {filteredContracts.map((contract, index) => (
           <motion.div
             key={contract.id}
             initial={{ opacity: 0, y: 10 }}
@@ -522,6 +822,12 @@ export default function ContratosPage() {
               <CardContent className="p-4">
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex items-start gap-4 flex-1">
+                    <input
+                      type="checkbox"
+                      checked={selectedContractIds.includes(contract.id)}
+                      onChange={() => toggleSelectedContract(contract.id)}
+                      className="mt-1 h-4 w-4 rounded border-input text-primary focus:ring-ring"
+                    />
                     <div className="p-3 rounded-xl bg-primary/10 text-2xl">
                       {typeLabels[contract.type].icon}
                     </div>
@@ -847,6 +1153,16 @@ export default function ContratosPage() {
         confirmLabel="Eliminar"
         onConfirm={handleDeleteContract}
         loading={actionLoading}
+      />
+
+      <ConfirmActionDialog
+        open={bulkDeleteDialogOpen}
+        onOpenChange={setBulkDeleteDialogOpen}
+        title="Eliminar contratos seleccionados"
+        description={`Se eliminaran ${selectedContractIds.length} contratos seleccionados. Esta accion no se puede deshacer.`}
+        confirmLabel="Eliminar seleccionados"
+        onConfirm={handleBulkDelete}
+        loading={bulkLoading}
       />
     </motion.div>
   );

@@ -18,7 +18,7 @@ async function main() {
     },
   });
 
-  const ops = await prisma.department.upsert({
+  await prisma.department.upsert({
     where: { name: "Operaciones" },
     update: {},
     create: {
@@ -28,7 +28,7 @@ async function main() {
     },
   });
 
-  const sales = await prisma.department.upsert({
+  await prisma.department.upsert({
     where: { name: "Ventas" },
     update: {},
     create: {
@@ -95,7 +95,7 @@ async function main() {
   });
 
   // Crear usuario de ejemplo (upsert)
-  const user = await prisma.user.upsert({
+  await prisma.user.upsert({
     where: { email: "juan@empresa.com" },
     update: {
       password: defaultPasswordHash,
@@ -118,7 +118,7 @@ async function main() {
   });
 
   // Crear activos (upsert)
-  const laptop = await prisma.asset.upsert({
+  await prisma.asset.upsert({
     where: { qrCode: "ACT-0042" },
     update: {},
     create: {
@@ -139,7 +139,7 @@ async function main() {
     },
   });
 
-  const monitor = await prisma.asset.upsert({
+  await prisma.asset.upsert({
     where: { qrCode: "ACT-0123" },
     update: {},
     create: {
@@ -160,7 +160,7 @@ async function main() {
     },
   });
 
-  const vehiculo = await prisma.asset.upsert({
+  await prisma.asset.upsert({
     where: { qrCode: "ACT-0156" },
     update: {},
     create: {

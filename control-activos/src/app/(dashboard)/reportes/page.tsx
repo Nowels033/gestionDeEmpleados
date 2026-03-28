@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Loading } from "@/components/ui/loading";
+import { DashboardPageHeader } from "@/components/layout/dashboard-page-header";
 import { useFetch } from "@/lib/hooks/use-fetch";
 import toast from "react-hot-toast";
 
@@ -189,13 +190,11 @@ export default function ReportesPage() {
       animate={{ opacity: 1, y: 0 }}
       className="space-y-6"
     >
-      {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Reportes PDF</h1>
-        <p className="text-muted-foreground">
-          Genera reportes profesionales en PDF y Excel
-        </p>
-      </div>
+      <DashboardPageHeader
+        eyebrow="Inteligencia"
+        title="Reportes"
+        description="Genera reportes profesionales en PDF y Excel"
+      />
 
       {/* Category Filters */}
       <div className="flex flex-wrap gap-2">

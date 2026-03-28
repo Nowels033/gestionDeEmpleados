@@ -6,6 +6,7 @@ import { Bot, Send, User, Sparkles, Package, Users, Building2 } from "lucide-rea
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
+import { DashboardPageHeader } from "@/components/layout/dashboard-page-header";
 
 interface Message {
   id: string;
@@ -91,16 +92,17 @@ export default function ChatPage() {
       animate={{ opacity: 1, y: 0 }}
       className="h-[calc(100vh-12rem)] flex flex-col"
     >
-      {/* Header */}
-      <div className="mb-4">
-        <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
-          <Bot className="h-8 w-8 text-primary" />
-          Chat IA
-        </h1>
-        <p className="text-muted-foreground">
-          Pregunta sobre tus activos en lenguaje natural
-        </p>
-      </div>
+      <DashboardPageHeader
+        className="mb-4"
+        eyebrow="Asistente"
+        title={
+          <span className="flex items-center gap-2">
+            <Bot className="h-7 w-7 text-primary" />
+            Chat IA
+          </span>
+        }
+        description="Pregunta sobre tus activos en lenguaje natural"
+      />
 
       {/* Chat Container */}
       <Card className="flex-1 flex flex-col overflow-hidden">

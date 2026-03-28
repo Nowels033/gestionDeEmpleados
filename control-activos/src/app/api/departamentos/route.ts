@@ -23,6 +23,7 @@ export async function GET() {
             select: {
               users: true,
               assignments: true,
+              contracts: true,
             },
           },
         },

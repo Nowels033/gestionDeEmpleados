@@ -10,10 +10,13 @@ import {
   Building2,
   Package,
   FileText,
+  FileDown,
   Edit,
   Trash2,
   MoreVertical,
   Eye,
+  UserCheck,
+  UserX,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -47,9 +50,12 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { Loading } from "@/components/ui/loading";
+import { EmptyState } from "@/components/ui/empty-state";
 import { ConfirmActionDialog } from "@/components/ui/confirm-action-dialog";
 import { Switch } from "@/components/ui/switch";
+import { DashboardPageHeader } from "@/components/layout/dashboard-page-header";
 import { useFetch } from "@/lib/hooks/use-fetch";
+import { downloadCsv } from "@/lib/csv";
 import toast from "react-hot-toast";
 
 interface User {
@@ -86,6 +92,8 @@ const roleColors: Record<string, { label: string; variant: "default" | "secondar
 };
 
 export default function UsuariosPage() {
+  const FILTERS_STORAGE_KEY = "usuarios.filters.v1";
+
   const { data: users, loading, refetch } = useFetch<User[]>("/api/usuarios", []);
   const { data: departments } = useFetch<Department[]>("/api/departamentos", []);
 
@@ -97,6 +105,10 @@ export default function UsuariosPage() {
   const [editDialogOpen, setEditDialogOpen] = React.useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false);
   const [actionLoading, setActionLoading] = React.useState(false);
+  const [selectedUserIds, setSelectedUserIds] = React.useState<string[]>([]);
+  const [bulkLoading, setBulkLoading] = React.useState(false);
+  const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = React.useState(false);
+  const [filtersHydrated, setFiltersHydrated] = React.useState(false);
   const [editFormData, setEditFormData] = React.useState({
     name: "",
     lastName: "",
@@ -131,6 +143,10 @@ export default function UsuariosPage() {
       user.employeeNumber.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  const allFilteredSelected =
+    filteredUsers.length > 0 &&
+    filteredUsers.every((user) => selectedUserIds.includes(user.id));
+
   const getInitials = (name: string, lastName: string) => {
     return `${name.charAt(0)}${lastName.charAt(0)}`.toUpperCase();
   };
@@ -149,6 +165,37 @@ export default function UsuariosPage() {
       password: "",
     });
   };
+
+  React.useEffect(() => {
+    if (filtersHydrated) {
+      return;
+    }
+
+    try {
+      const raw = localStorage.getItem(FILTERS_STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as { searchQuery?: string };
+        if (typeof parsed.searchQuery === "string") {
+          setSearchQuery(parsed.searchQuery);
+        }
+      }
+    } catch {
+      // noop
+    } finally {
+      setFiltersHydrated(true);
+    }
+  }, [filtersHydrated]);
+
+  React.useEffect(() => {
+    if (!filtersHydrated) {
+      return;
+    }
+
+    localStorage.setItem(
+      FILTERS_STORAGE_KEY,
+      JSON.stringify({ searchQuery })
+    );
+  }, [filtersHydrated, searchQuery]);
 
   const handleCreateUser = async () => {
     if (
@@ -285,6 +332,7 @@ export default function UsuariosPage() {
       setDeleteDialogOpen(false);
       setDetailDialogOpen(false);
       setSelectedUser(null);
+      setSelectedUserIds((prev) => prev.filter((id) => id !== selectedUser.id));
       refetch();
     } catch {
       toast.error("No fue posible eliminar");
@@ -292,6 +340,151 @@ export default function UsuariosPage() {
       setActionLoading(false);
     }
   };
+
+  const toggleSelectedUser = (userId: string) => {
+    setSelectedUserIds((prev) =>
+      prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId]
+    );
+  };
+
+  const toggleAllFilteredUsers = () => {
+    const visibleIds = filteredUsers.map((user) => user.id);
+    if (allFilteredSelected) {
+      setSelectedUserIds((prev) => prev.filter((id) => !visibleIds.includes(id)));
+      return;
+    }
+
+    setSelectedUserIds((prev) => Array.from(new Set([...prev, ...visibleIds])));
+  };
+
+  const handleBulkStatus = async (isActive: boolean) => {
+    if (selectedUserIds.length === 0) {
+      return;
+    }
+
+    try {
+      setBulkLoading(true);
+      const results = await Promise.all(
+        selectedUserIds.map(async (userId) => {
+          const response = await fetch(`/api/usuarios/${userId}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ isActive }),
+          });
+          return response.ok;
+        })
+      );
+
+      const successCount = results.filter(Boolean).length;
+      const failedCount = results.length - successCount;
+
+      if (successCount > 0) {
+        toast.success(
+          `${successCount} usuarios ${isActive ? "activados" : "desactivados"}`
+        );
+      }
+      if (failedCount > 0) {
+        toast.error(`${failedCount} usuarios no pudieron actualizarse`);
+      }
+
+      setSelectedUserIds([]);
+      refetch();
+    } catch {
+      toast.error("No fue posible actualizar usuarios seleccionados");
+    } finally {
+      setBulkLoading(false);
+    }
+  };
+
+  const openBulkDeleteDialog = () => {
+    if (selectedUserIds.length === 0) {
+      return;
+    }
+    setBulkDeleteDialogOpen(true);
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedUserIds.length === 0) {
+      return;
+    }
+
+    try {
+      setBulkLoading(true);
+      const results = await Promise.all(
+        selectedUserIds.map(async (userId) => {
+          const response = await fetch(`/api/usuarios/${userId}`, {
+            method: "DELETE",
+          });
+          return response.ok;
+        })
+      );
+
+      const successCount = results.filter(Boolean).length;
+      const failedCount = results.length - successCount;
+
+      if (successCount > 0) {
+        toast.success(`${successCount} usuarios eliminados`);
+      }
+      if (failedCount > 0) {
+        toast.error(`${failedCount} usuarios no pudieron eliminarse`);
+      }
+
+      setSelectedUserIds([]);
+      setSelectedUser(null);
+      setDetailDialogOpen(false);
+      setBulkDeleteDialogOpen(false);
+      refetch();
+    } catch {
+      toast.error("No fue posible eliminar usuarios seleccionados");
+    } finally {
+      setBulkLoading(false);
+    }
+  };
+
+  const handleExportCsv = () => {
+    downloadCsv(
+      filteredUsers,
+      [
+        { key: "employeeNumber", header: "Numero Empleado" },
+        { key: "name", header: "Nombre", map: (user) => `${user.name} ${user.lastName}` },
+        { key: "email", header: "Email" },
+        { key: "position", header: "Puesto" },
+        { key: "role", header: "Rol" },
+        { key: "isActive", header: "Activo", map: (user) => (user.isActive ? "Si" : "No") },
+        { key: "department", header: "Departamento", map: (user) => user.department.name },
+        {
+          key: "assignments",
+          header: "Activos Asignados",
+          map: (user) => user._count.assignments,
+        },
+      ],
+      `usuarios-${new Date().toISOString().slice(0, 10)}.csv`
+    );
+    toast.success("CSV exportado correctamente");
+  };
+
+  React.useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey) || !event.shiftKey) {
+        return;
+      }
+
+      const key = event.key.toLowerCase();
+      if (key === "a") {
+        event.preventDefault();
+        toggleAllFilteredUsers();
+      }
+
+      if (key === "e") {
+        event.preventDefault();
+        handleExportCsv();
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filteredUsers, selectedUserIds]);
 
   if (loading) {
     return <Loading text="Cargando usuarios..." />;
@@ -303,12 +496,12 @@ export default function UsuariosPage() {
       animate={{ opacity: 1, y: 0 }}
       className="space-y-6"
     >
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Usuarios</h1>
-          <p className="text-muted-foreground">Gestiona los usuarios y sus documentos</p>
-        </div>
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+      <DashboardPageHeader
+        eyebrow="Talento"
+        title="Usuarios"
+        description="Gestiona los usuarios y sus documentos"
+        actions={
+          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
             <Button>
               <Plus className="h-4 w-4 mr-2" />
@@ -473,30 +666,89 @@ export default function UsuariosPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+        }
+      />
+
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="relative max-w-md w-full">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Buscar por nombre, email o numero de empleado..."
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            className="pl-10"
+          />
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="outline" size="sm" onClick={handleExportCsv}>
+            <FileDown className="h-4 w-4 mr-2" />
+            Exportar CSV
+          </Button>
+          <Button variant="outline" size="sm" onClick={toggleAllFilteredUsers}>
+            {allFilteredSelected ? "Quitar visibles" : "Seleccionar visibles"}
+          </Button>
+          {selectedUserIds.length > 0 && (
+            <div className="fixed bottom-4 left-4 right-4 z-30 flex flex-wrap items-center gap-2 rounded-xl border border-border/70 bg-background/95 px-3 py-2 text-sm shadow-lg backdrop-blur md:left-auto md:right-6 md:max-w-fit">
+              <Badge variant="secondary">{selectedUserIds.length} seleccionados</Badge>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleBulkStatus(true)}
+                disabled={bulkLoading}
+              >
+                <UserCheck className="h-4 w-4 mr-2" />
+                Activar
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleBulkStatus(false)}
+                disabled={bulkLoading}
+              >
+                <UserX className="h-4 w-4 mr-2" />
+                Desactivar
+              </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={openBulkDeleteDialog}
+                disabled={bulkLoading}
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Eliminar
+              </Button>
+            </div>
+          )}
+        </div>
       </div>
 
-      <div className="relative max-w-md">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder="Buscar por nombre, email o numero de empleado..."
-          value={searchQuery}
-          onChange={(event) => setSearchQuery(event.target.value)}
-          className="pl-10"
+      {filteredUsers.length === 0 ? (
+        <EmptyState
+          icon={Users}
+          title="No se encontraron usuarios"
+          description="Ajusta la busqueda o registra un nuevo usuario para continuar."
+          actionLabel="Nuevo usuario"
+          onAction={() => setDialogOpen(true)}
         />
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {filteredUsers.map((user, index) => (
-          <motion.div
-            key={user.id}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: index * 0.05 }}
-          >
-            <Card className="overflow-hidden hover:shadow-lg transition-all duration-300 group cursor-pointer">
-              <CardContent className="p-6">
+      ) : (
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {filteredUsers.map((user, index) => (
+            <motion.div
+              key={user.id}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: index * 0.05 }}
+            >
+              <Card className="overflow-hidden hover:shadow-lg transition-all duration-300 group cursor-pointer">
+                <CardContent className="p-6">
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex items-center gap-3">
+                    <input
+                      type="checkbox"
+                      checked={selectedUserIds.includes(user.id)}
+                      onChange={() => toggleSelectedUser(user.id)}
+                      className="h-4 w-4 rounded border-input text-primary focus:ring-ring"
+                    />
                     <Avatar className="h-12 w-12">
                       <AvatarImage src={user.photo || ""} />
                       <AvatarFallback className="bg-primary text-primary-foreground text-sm">
@@ -582,11 +834,12 @@ export default function UsuariosPage() {
                   <Eye className="h-4 w-4 mr-2" />
                   Ver perfil completo
                 </Button>
-              </CardContent>
-            </Card>
-          </motion.div>
-        ))}
-      </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          ))}
+        </div>
+      )}
 
       <Dialog open={detailDialogOpen} onOpenChange={setDetailDialogOpen}>
         <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
@@ -846,6 +1099,16 @@ export default function UsuariosPage() {
         confirmLabel="Eliminar"
         onConfirm={handleDeleteUser}
         loading={actionLoading}
+      />
+
+      <ConfirmActionDialog
+        open={bulkDeleteDialogOpen}
+        onOpenChange={setBulkDeleteDialogOpen}
+        title="Eliminar usuarios seleccionados"
+        description={`Se eliminaran ${selectedUserIds.length} usuarios seleccionados. Esta accion no se puede deshacer.`}
+        confirmLabel="Eliminar seleccionados"
+        onConfirm={handleBulkDelete}
+        loading={bulkLoading}
       />
 
       <div className="grid gap-4 md:grid-cols-4">

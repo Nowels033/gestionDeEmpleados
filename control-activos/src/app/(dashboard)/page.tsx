@@ -15,6 +15,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { LoadingSkeleton } from "@/components/ui/loading";
+import { DashboardPageHeader } from "@/components/layout/dashboard-page-header";
 import { useFetch } from "@/lib/hooks/use-fetch";
 import {
   BarChart,
@@ -172,14 +173,12 @@ export default function DashboardPage() {
       animate="show"
       className="space-y-8"
     >
-      {/* Header */}
-      <motion.div variants={item} className="flex flex-col gap-2">
-        <h1 className="text-3xl font-bold tracking-tight">
-          ¡Bienvenido! 👋
-        </h1>
-        <p className="text-muted-foreground">
-          Resumen del estado de tus activos empresariales
-        </p>
+      <motion.div variants={item}>
+        <DashboardPageHeader
+          eyebrow="Panel"
+          title="Bienvenido"
+          description="Resumen del estado de tus activos empresariales"
+        />
       </motion.div>
 
       {/* Stats Cards */}
