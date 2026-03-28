@@ -532,7 +532,7 @@ export default function ContratosPage() {
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="space-y-6"
+      className="space-y-8"
     >
       <DashboardPageHeader
         eyebrow="Legal"
@@ -567,7 +567,7 @@ export default function ContratosPage() {
                   }
                 />
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label>Tipo *</Label>
                   <Select
@@ -606,7 +606,7 @@ export default function ContratosPage() {
                   />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label>Fecha inicio *</Label>
                   <Input
@@ -639,7 +639,7 @@ export default function ContratosPage() {
                   }
                 />
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label>Activo (opcional)</Label>
                   <Select
@@ -712,50 +712,57 @@ export default function ContratosPage() {
         }
       />
 
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Buscar por nombre, proveedor o activo..."
-            value={searchQuery}
-            onChange={(event) => setSearchQuery(event.target.value)}
-            className="pl-10"
-          />
+      <div className="rounded-xl border border-border bg-card p-4 sm:p-5">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+          <div className="relative w-full xl:max-w-md">
+            <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Buscar por nombre, proveedor o activo..."
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              className="pl-10"
+            />
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2.5">
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-[170px]">
+                <SelectValue placeholder="Estado" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos</SelectItem>
+                <SelectItem value="ACTIVE">Activo</SelectItem>
+                <SelectItem value="EXPIRED">Vencido</SelectItem>
+                <SelectItem value="CANCELLED">Cancelado</SelectItem>
+                <SelectItem value="RENEWED">Renovado</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select value={typeFilter} onValueChange={setTypeFilter}>
+              <SelectTrigger className="w-[170px]">
+                <SelectValue placeholder="Tipo" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos</SelectItem>
+                <SelectItem value="SERVICE">Servicio</SelectItem>
+                <SelectItem value="WARRANTY">Garantia</SelectItem>
+                <SelectItem value="INSURANCE">Seguro</SelectItem>
+                <SelectItem value="LEASE">Arrendamiento</SelectItem>
+                <SelectItem value="LICENSE">Licencia</SelectItem>
+                <SelectItem value="MAINTENANCE">Mantenimiento</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Button variant="outline" onClick={toggleAllFilteredContracts}>
+              {allFilteredSelected ? "Quitar visibles" : "Seleccionar visibles"}
+            </Button>
+          </div>
         </div>
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-[170px]">
-            <SelectValue placeholder="Estado" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos</SelectItem>
-            <SelectItem value="ACTIVE">Activo</SelectItem>
-            <SelectItem value="EXPIRED">Vencido</SelectItem>
-            <SelectItem value="CANCELLED">Cancelado</SelectItem>
-            <SelectItem value="RENEWED">Renovado</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select value={typeFilter} onValueChange={setTypeFilter}>
-          <SelectTrigger className="w-[170px]">
-            <SelectValue placeholder="Tipo" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos</SelectItem>
-            <SelectItem value="SERVICE">Servicio</SelectItem>
-            <SelectItem value="WARRANTY">Garantia</SelectItem>
-            <SelectItem value="INSURANCE">Seguro</SelectItem>
-            <SelectItem value="LEASE">Arrendamiento</SelectItem>
-            <SelectItem value="LICENSE">Licencia</SelectItem>
-            <SelectItem value="MAINTENANCE">Mantenimiento</SelectItem>
-          </SelectContent>
-        </Select>
-        <Button variant="outline" onClick={toggleAllFilteredContracts}>
-          {allFilteredSelected ? "Quitar visibles" : "Seleccionar visibles"}
-        </Button>
       </div>
 
       {selectedContractIds.length > 0 && (
-        <div className="fixed bottom-4 left-4 right-4 z-30 flex flex-wrap items-center gap-2 rounded-xl border border-border/70 bg-background/95 px-3 py-2 text-sm shadow-lg backdrop-blur md:left-auto md:right-6 md:max-w-fit">
-          <span className="font-medium">{selectedContractIds.length} seleccionados</span>
+        <div className="fixed bottom-4 left-4 right-4 z-30 flex flex-wrap items-center gap-2 rounded-xl border border-border bg-card/95 px-3.5 py-2.5 text-sm shadow-[0_24px_40px_-30px_rgba(0,0,0,0.9)] backdrop-blur md:left-auto md:right-6 md:max-w-fit">
+          <span className="font-medium tracking-[0.01em]">{selectedContractIds.length} seleccionados</span>
           <Button
             variant="outline"
             size="sm"
@@ -806,9 +813,9 @@ export default function ContratosPage() {
             transition={{ delay: index * 0.03 }}
           >
             <Card
-              className={`hover:shadow-md transition-all duration-200 ${
+              className={`group transition-all duration-200 ease-in-out ${
                 contract.daysUntilExpiry <= 30 && contract.status === "ACTIVE"
-                  ? "border-amber-500/50"
+                  ? "border-primary/40"
                   : ""
               }`}
             >
@@ -819,9 +826,9 @@ export default function ContratosPage() {
                       type="checkbox"
                       checked={selectedContractIds.includes(contract.id)}
                       onChange={() => toggleSelectedContract(contract.id)}
-                      className="mt-1 h-4 w-4 rounded border-input text-primary focus:ring-ring"
+                      className="mt-1 h-4 w-4 rounded border-border bg-card text-primary focus:ring-primary/40"
                     />
-                    <div className="p-3 rounded-xl bg-primary/10 text-2xl">
+                    <div className="rounded-xl border border-border bg-secondary p-3 text-xl text-muted-foreground">
                       {typeLabels[contract.type].icon}
                     </div>
                     <div className="flex-1">
@@ -864,12 +871,12 @@ export default function ContratosPage() {
                       {contract.notes && <p className="text-xs text-muted-foreground mt-1">📝 {contract.notes}</p>}
                     </div>
                   </div>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" className="h-8 w-8">
-                        <MoreVertical className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-8 w-8 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100">
+                          <MoreVertical className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
                       <DropdownMenuItem>
                         <Eye className="h-4 w-4 mr-2" />
@@ -900,8 +907,8 @@ export default function ContratosPage() {
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center gap-4">
-              <div className="p-3 rounded-xl bg-emerald-500/10">
-                <CheckCircle className="h-6 w-6 text-emerald-500" />
+              <div className="rounded-xl bg-secondary p-3">
+                <CheckCircle className="h-6 w-6 text-muted-foreground" />
               </div>
               <div>
                 <p className="text-2xl font-bold">
@@ -915,8 +922,8 @@ export default function ContratosPage() {
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center gap-4">
-              <div className="p-3 rounded-xl bg-amber-500/10">
-                <AlertTriangle className="h-6 w-6 text-amber-500" />
+              <div className="rounded-xl bg-primary/10 p-3">
+                <AlertTriangle className="h-6 w-6 text-primary" />
               </div>
               <div>
                 <p className="text-2xl font-bold">
@@ -934,8 +941,8 @@ export default function ContratosPage() {
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center gap-4">
-              <div className="p-3 rounded-xl bg-red-500/10">
-                <Clock className="h-6 w-6 text-red-500" />
+              <div className="rounded-xl bg-secondary p-3">
+                <Clock className="h-6 w-6 text-muted-foreground" />
               </div>
               <div>
                 <p className="text-2xl font-bold">
@@ -949,8 +956,8 @@ export default function ContratosPage() {
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center gap-4">
-              <div className="p-3 rounded-xl bg-purple-500/10">
-                <DollarSign className="h-6 w-6 text-purple-500" />
+              <div className="rounded-xl bg-secondary p-3">
+                <DollarSign className="h-6 w-6 text-muted-foreground" />
               </div>
               <div>
                 <p className="text-lg font-bold">
@@ -983,7 +990,7 @@ export default function ContratosPage() {
                 }
               />
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label>Tipo</Label>
                 <Select
@@ -1040,7 +1047,7 @@ export default function ContratosPage() {
                 }
               />
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label>Fecha inicio *</Label>
                 <Input
@@ -1072,7 +1079,7 @@ export default function ContratosPage() {
                 }
               />
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label>Activo</Label>
                 <Select

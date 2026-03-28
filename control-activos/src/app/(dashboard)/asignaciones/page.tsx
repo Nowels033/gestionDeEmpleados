@@ -587,7 +587,7 @@ export default function AsignacionesPage() {
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="space-y-6"
+      className="space-y-8"
     >
       <DashboardPageHeader
         eyebrow="Operacion"
@@ -734,45 +734,52 @@ export default function AsignacionesPage() {
         }
       />
 
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Buscar por activo, usuario o departamento..."
-            value={searchQuery}
-            onChange={(event) => setSearchQuery(event.target.value)}
-            className="pl-10"
-          />
+      <div className="rounded-xl border border-border bg-card p-4 sm:p-5">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+          <div className="relative w-full xl:max-w-md">
+            <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Buscar por activo, usuario o departamento..."
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              className="pl-10"
+            />
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2.5">
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-[150px]">
+                <SelectValue placeholder="Estado" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos</SelectItem>
+                <SelectItem value="ACTIVE">Activos</SelectItem>
+                <SelectItem value="RETURNED">Devueltos</SelectItem>
+                <SelectItem value="TRANSFERRED">Transferidos</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select value={typeFilter} onValueChange={setTypeFilter}>
+              <SelectTrigger className="w-[150px]">
+                <SelectValue placeholder="Tipo" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos</SelectItem>
+                <SelectItem value="PERSONAL">Personal</SelectItem>
+                <SelectItem value="DEPARTAMENTAL">Departamental</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Button variant="outline" onClick={toggleAllFilteredAssignments}>
+              {allFilteredSelected ? "Quitar visibles" : "Seleccionar visibles"}
+            </Button>
+          </div>
         </div>
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-[150px]">
-            <SelectValue placeholder="Estado" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos</SelectItem>
-            <SelectItem value="ACTIVE">Activos</SelectItem>
-            <SelectItem value="RETURNED">Devueltos</SelectItem>
-            <SelectItem value="TRANSFERRED">Transferidos</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select value={typeFilter} onValueChange={setTypeFilter}>
-          <SelectTrigger className="w-[150px]">
-            <SelectValue placeholder="Tipo" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos</SelectItem>
-            <SelectItem value="PERSONAL">Personal</SelectItem>
-            <SelectItem value="DEPARTAMENTAL">Departamental</SelectItem>
-          </SelectContent>
-        </Select>
-        <Button variant="outline" onClick={toggleAllFilteredAssignments}>
-          {allFilteredSelected ? "Quitar visibles" : "Seleccionar visibles"}
-        </Button>
       </div>
 
       {selectedAssignmentIds.length > 0 && (
-        <div className="fixed bottom-4 left-4 right-4 z-30 flex flex-wrap items-center gap-2 rounded-xl border border-border/70 bg-background/95 px-3 py-2 text-sm shadow-lg backdrop-blur md:left-auto md:right-6 md:max-w-fit">
-          <span className="font-medium">{selectedAssignmentIds.length} seleccionadas</span>
+        <div className="fixed bottom-4 left-4 right-4 z-30 flex flex-wrap items-center gap-2 rounded-xl border border-border bg-card/95 px-3.5 py-2.5 text-sm shadow-[0_24px_40px_-30px_rgba(0,0,0,0.9)] backdrop-blur md:left-auto md:right-6 md:max-w-fit">
+          <span className="font-medium tracking-[0.01em]">{selectedAssignmentIds.length} seleccionadas</span>
           <Button
             variant="outline"
             size="sm"
@@ -825,12 +832,12 @@ export default function AsignacionesPage() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: index * 0.03 }}
             >
-              <Card className="hover:shadow-md transition-all duration-200">
+              <Card className="group border-border transition-all duration-200 ease-in-out">
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between gap-4">
                     <div className="flex items-center gap-4 flex-1 min-w-0">
-                      <div className="p-3 rounded-xl bg-primary/10 shrink-0">
-                        <Package className="h-6 w-6 text-primary" />
+                      <div className="shrink-0 rounded-xl border border-border bg-secondary p-3">
+                        <Package className="h-6 w-6 text-muted-foreground" />
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
@@ -869,7 +876,7 @@ export default function AsignacionesPage() {
                         type="checkbox"
                         checked={selectedAssignmentIds.includes(assignment.id)}
                         onChange={() => toggleSelectedAssignment(assignment.id)}
-                        className="h-4 w-4 rounded border-input text-primary focus:ring-ring"
+                        className="h-4 w-4 rounded border-border bg-card text-primary focus:ring-primary/40"
                       />
                       <Button variant="outline" size="sm">
                         <Eye className="h-4 w-4 mr-1" />
@@ -881,7 +888,7 @@ export default function AsignacionesPage() {
                       </Button>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-8 w-8">
+                          <Button variant="ghost" size="icon" className="h-8 w-8 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100">
                             <MoreVertical className="h-4 w-4" />
                           </Button>
                         </DropdownMenuTrigger>
@@ -1137,8 +1144,8 @@ export default function AsignacionesPage() {
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center gap-4">
-              <div className="p-3 rounded-xl bg-emerald-500/10">
-                <CheckCircle className="h-6 w-6 text-emerald-500" />
+              <div className="rounded-xl bg-secondary p-3">
+                <CheckCircle className="h-6 w-6 text-muted-foreground" />
               </div>
               <div>
                 <p className="text-2xl font-bold">
@@ -1152,8 +1159,8 @@ export default function AsignacionesPage() {
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center gap-4">
-              <div className="p-3 rounded-xl bg-amber-500/10">
-                <ArrowLeftRight className="h-6 w-6 text-amber-500" />
+              <div className="rounded-xl bg-secondary p-3">
+                <ArrowLeftRight className="h-6 w-6 text-muted-foreground" />
               </div>
               <div>
                 <p className="text-2xl font-bold">
@@ -1167,8 +1174,8 @@ export default function AsignacionesPage() {
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center gap-4">
-              <div className="p-3 rounded-xl bg-blue-500/10">
-                <Building2 className="h-6 w-6 text-blue-500" />
+              <div className="rounded-xl bg-secondary p-3">
+                <Building2 className="h-6 w-6 text-muted-foreground" />
               </div>
               <div>
                 <p className="text-2xl font-bold">
@@ -1182,8 +1189,8 @@ export default function AsignacionesPage() {
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center gap-4">
-              <div className="p-3 rounded-xl bg-primary/10">
-                <Package className="h-6 w-6 text-primary" />
+              <div className="rounded-xl bg-secondary p-3">
+                <Package className="h-6 w-6 text-muted-foreground" />
               </div>
               <div>
                 <p className="text-2xl font-bold">

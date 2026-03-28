@@ -7,38 +7,58 @@ interface LoadingProps {
   text?: string;
 }
 
-export function Loading({ className, text = "Cargando..." }: LoadingProps) {
+function PulseBlock({ className }: { className?: string }) {
+  return <div className={cn("animate-pulse rounded-lg bg-muted/70", className)} />;
+}
+
+export function Loading({ className, text = "Cargando datos" }: LoadingProps) {
   return (
     <div
-      className={cn("flex flex-col items-center justify-center py-12", className)}
+      className={cn("space-y-5", className)}
       role="status"
       aria-live="polite"
       aria-busy="true"
     >
-      <div className="relative mb-4">
-        <div className="h-10 w-10 rounded-full border-2 border-primary/20" />
-        <div
-          className="absolute inset-0 motion-safe:animate-spin rounded-full border-2 border-transparent border-t-primary"
-          aria-hidden="true"
-        />
+      <span className="sr-only">{text}</span>
+
+      <div className="rounded-xl border border-border bg-card p-5">
+        <PulseBlock className="h-3 w-32" />
+        <PulseBlock className="mt-4 h-8 w-52" />
+        <PulseBlock className="mt-3 h-4 w-80 max-w-full" />
       </div>
-      <p className="text-sm text-muted-foreground">{text}</p>
+
+      <div className="grid gap-4 md:grid-cols-3">
+        {[1, 2, 3].map((index) => (
+          <div key={index} className="rounded-xl border border-border bg-card p-5">
+            <PulseBlock className="h-3 w-20" />
+            <PulseBlock className="mt-3 h-7 w-24" />
+            <PulseBlock className="mt-4 h-3 w-28" />
+          </div>
+        ))}
+      </div>
+
+      <div className="rounded-xl border border-border bg-card p-4">
+        <div className="grid grid-cols-[1.2fr_2fr_1.4fr_1.2fr_1.4fr] gap-3 border-b border-border pb-3">
+          {[1, 2, 3, 4, 5].map((index) => (
+            <PulseBlock key={index} className="h-3 w-full" />
+          ))}
+        </div>
+        <div className="space-y-3 pt-4">
+          {[1, 2, 3, 4, 5, 6].map((index) => (
+            <div key={index} className="grid grid-cols-[1.2fr_2fr_1.4fr_1.2fr_1.4fr] gap-3">
+              <PulseBlock className="h-4 w-20" />
+              <PulseBlock className="h-4 w-40" />
+              <PulseBlock className="h-4 w-24" />
+              <PulseBlock className="h-4 w-24" />
+              <PulseBlock className="h-4 w-28" />
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
 
 export function LoadingSkeleton({ className }: { className?: string }) {
-  return (
-    <div className={cn("motion-safe:animate-pulse space-y-4", className)} aria-hidden="true">
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {[1, 2, 3, 4].map((i) => (
-          <div key={i} className="h-32 rounded-xl bg-muted/70 soft-grid" />
-        ))}
-      </div>
-      <div className="grid gap-4 md:grid-cols-2">
-        <div className="h-64 rounded-xl bg-muted/70 soft-grid" />
-        <div className="h-64 rounded-xl bg-muted/70 soft-grid" />
-      </div>
-    </div>
-  );
+  return <Loading className={className} text="Cargando panel" />;
 }

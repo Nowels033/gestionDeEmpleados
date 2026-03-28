@@ -82,9 +82,9 @@ interface UserOption {
 }
 
 const typeLabels: Record<string, { label: string; color: string }> = {
-  PREVENTIVE: { label: "Preventivo", color: "text-blue-500" },
-  CORRECTIVE: { label: "Correctivo", color: "text-amber-500" },
-  EMERGENCY: { label: "Emergencia", color: "text-red-500" },
+  PREVENTIVE: { label: "Preventivo", color: "text-muted-foreground" },
+  CORRECTIVE: { label: "Correctivo", color: "text-foreground" },
+  EMERGENCY: { label: "Emergencia", color: "text-primary" },
 };
 
 const statusColors: Record<
@@ -287,7 +287,7 @@ export default function MantenimientoPage() {
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="space-y-6"
+      className="space-y-8"
     >
       <DashboardPageHeader
         eyebrow="Soporte"
@@ -355,7 +355,7 @@ export default function MantenimientoPage() {
                   }
                 />
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label>Fecha programada *</Label>
                   <Input
@@ -430,17 +430,13 @@ export default function MantenimientoPage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: index * 0.03 }}
           >
-            <Card className="hover:shadow-md transition-all duration-200">
+            <Card className="group border-border transition-all duration-200 ease-in-out">
               <CardContent className="p-4">
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex items-start gap-4 flex-1">
                     <div
-                      className={`p-3 rounded-xl ${
-                        log.type === "EMERGENCY"
-                          ? "bg-red-500/10"
-                          : log.type === "CORRECTIVE"
-                            ? "bg-amber-500/10"
-                            : "bg-blue-500/10"
+                      className={`rounded-xl border border-border p-3 ${
+                        log.type === "EMERGENCY" ? "bg-primary/10" : "bg-secondary"
                       }`}
                     >
                       <Wrench className={`h-6 w-6 ${typeLabels[log.type].color}`} />
@@ -476,12 +472,12 @@ export default function MantenimientoPage() {
                       {log.notes && <p className="text-xs text-muted-foreground mt-1">📝 {log.notes}</p>}
                     </div>
                   </div>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" className="h-8 w-8">
-                        <MoreVertical className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-8 w-8 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100">
+                          <MoreVertical className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
                       <DropdownMenuItem>
                         <Eye className="h-4 w-4 mr-2" />
@@ -508,8 +504,8 @@ export default function MantenimientoPage() {
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center gap-4">
-              <div className="p-3 rounded-xl bg-amber-500/10">
-                <Clock className="h-6 w-6 text-amber-500" />
+              <div className="rounded-xl bg-primary/10 p-3">
+                <Clock className="h-6 w-6 text-primary" />
               </div>
               <div>
                 <p className="text-2xl font-bold">
@@ -523,8 +519,8 @@ export default function MantenimientoPage() {
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center gap-4">
-              <div className="p-3 rounded-xl bg-blue-500/10">
-                <Wrench className="h-6 w-6 text-blue-500" />
+              <div className="rounded-xl bg-secondary p-3">
+                <Wrench className="h-6 w-6 text-muted-foreground" />
               </div>
               <div>
                 <p className="text-2xl font-bold">
@@ -538,8 +534,8 @@ export default function MantenimientoPage() {
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center gap-4">
-              <div className="p-3 rounded-xl bg-emerald-500/10">
-                <CheckCircle className="h-6 w-6 text-emerald-500" />
+              <div className="rounded-xl bg-secondary p-3">
+                <CheckCircle className="h-6 w-6 text-muted-foreground" />
               </div>
               <div>
                 <p className="text-2xl font-bold">
@@ -553,8 +549,8 @@ export default function MantenimientoPage() {
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center gap-4">
-              <div className="p-3 rounded-xl bg-purple-500/10">
-                <DollarSign className="h-6 w-6 text-purple-500" />
+              <div className="rounded-xl bg-secondary p-3">
+                <DollarSign className="h-6 w-6 text-muted-foreground" />
               </div>
               <div>
                 <p className="text-lg font-bold">
@@ -576,7 +572,7 @@ export default function MantenimientoPage() {
             <DialogDescription>Actualiza todos los campos del mantenimiento.</DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label>Tipo</Label>
                 <Select
@@ -624,7 +620,7 @@ export default function MantenimientoPage() {
                 }
               />
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label>Fecha programada</Label>
                 <Input

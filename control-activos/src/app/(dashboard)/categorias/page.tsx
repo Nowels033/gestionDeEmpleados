@@ -239,7 +239,7 @@ export default function CategoriasPage() {
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="space-y-6"
+      className="space-y-8"
     >
       <DashboardPageHeader
         eyebrow="Catalogo"
@@ -360,7 +360,7 @@ export default function CategoriasPage() {
                 animate={{ opacity: 1, x: 0 }}
               >
                 <div
-                  className="flex items-center gap-3 p-3 rounded-lg hover:bg-muted/50 transition-colors cursor-pointer group"
+                  className="group flex cursor-pointer items-center gap-3 rounded-lg p-3 transition-colors duration-200 ease-in-out hover:bg-accent"
                   onClick={() =>
                     category.children &&
                     category.children.length > 0 &&
@@ -434,12 +434,12 @@ export default function CategoriasPage() {
                       initial={{ opacity: 0, height: 0 }}
                       animate={{ opacity: 1, height: "auto" }}
                       exit={{ opacity: 0, height: 0 }}
-                      className="ml-12 space-y-1 border-l-2 border-muted pl-4"
+                      className="ml-12 space-y-1 border-l border-border pl-4"
                     >
                       {category.children.map((child) => (
                         <div
                           key={child.id}
-                          className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50 transition-colors group"
+                          className="group flex items-center gap-3 rounded-lg p-2 transition-colors duration-200 ease-in-out hover:bg-accent"
                         >
                           <span className="text-xl">{child.icon || "📁"}</span>
                           <div className="flex-1 min-w-0">
@@ -479,8 +479,8 @@ export default function CategoriasPage() {
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center gap-4">
-              <div className="p-3 rounded-xl bg-primary/10">
-                <FolderTree className="h-6 w-6 text-primary" />
+              <div className="rounded-xl bg-secondary p-3">
+                <FolderTree className="h-6 w-6 text-muted-foreground" />
               </div>
               <div>
                 <p className="text-2xl font-bold">{rootCategories.length}</p>
@@ -494,8 +494,8 @@ export default function CategoriasPage() {
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center gap-4">
-              <div className="p-3 rounded-xl bg-emerald-500/10">
-                <FolderTree className="h-6 w-6 text-emerald-500" />
+              <div className="rounded-xl bg-secondary p-3">
+                <FolderTree className="h-6 w-6 text-muted-foreground" />
               </div>
               <div>
                 <p className="text-2xl font-bold">
@@ -512,8 +512,8 @@ export default function CategoriasPage() {
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center gap-4">
-              <div className="p-3 rounded-xl bg-amber-500/10">
-                <Package className="h-6 w-6 text-amber-500" />
+              <div className="rounded-xl bg-secondary p-3">
+                <Package className="h-6 w-6 text-muted-foreground" />
               </div>
               <div>
                 <p className="text-2xl font-bold">

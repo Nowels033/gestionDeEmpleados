@@ -519,7 +519,7 @@ export default function UsuariosPage() {
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="space-y-6"
+      className="space-y-8"
     >
       <DashboardPageHeader
         eyebrow="Talento"
@@ -539,7 +539,7 @@ export default function UsuariosPage() {
               <DialogDescription>Ingresa los datos del nuevo usuario</DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="name">Nombre *</Label>
                   <Input
@@ -563,7 +563,7 @@ export default function UsuariosPage() {
                   />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="email">Email *</Label>
                   <Input
@@ -588,7 +588,7 @@ export default function UsuariosPage() {
                   />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="employeeNumber">Numero de empleado *</Label>
                   <Input
@@ -615,7 +615,7 @@ export default function UsuariosPage() {
                   />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label>Departamento *</Label>
                   <Select
@@ -648,7 +648,7 @@ export default function UsuariosPage() {
                   />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label>Rol</Label>
                   <Select
@@ -713,7 +713,7 @@ export default function UsuariosPage() {
             {allFilteredSelected ? "Quitar visibles" : "Seleccionar visibles"}
           </Button>
           {selectedUserIds.length > 0 && (
-            <div className="fixed bottom-4 left-4 right-4 z-30 flex flex-wrap items-center gap-2 rounded-xl border border-border/70 bg-background/95 px-3 py-2 text-sm shadow-lg backdrop-blur md:left-auto md:right-6 md:max-w-fit">
+            <div className="fixed bottom-4 left-4 right-4 z-30 flex flex-wrap items-center gap-2 rounded-xl border border-border bg-card/95 px-3.5 py-2.5 text-sm shadow-[0_24px_40px_-30px_rgba(0,0,0,0.9)] backdrop-blur md:left-auto md:right-6 md:max-w-fit">
               <Badge variant="secondary">{selectedUserIds.length} seleccionados</Badge>
               <Button
                 variant="outline"
@@ -764,7 +764,7 @@ export default function UsuariosPage() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: index * 0.05 }}
             >
-              <Card className="overflow-hidden hover:shadow-lg transition-all duration-300 group cursor-pointer">
+              <Card className="group cursor-pointer overflow-hidden border-border transition-all duration-200 ease-in-out">
                 <CardContent className="p-6">
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex items-center gap-3">
@@ -772,11 +772,11 @@ export default function UsuariosPage() {
                       type="checkbox"
                       checked={selectedUserIds.includes(user.id)}
                       onChange={() => toggleSelectedUser(user.id)}
-                      className="h-4 w-4 rounded border-input text-primary focus:ring-ring"
+                      className="h-4 w-4 rounded border-border bg-card text-primary focus:ring-primary/40"
                     />
                     <Avatar className="h-12 w-12">
                       <AvatarImage src={user.photo || ""} />
-                      <AvatarFallback className="bg-primary text-primary-foreground text-sm">
+                      <AvatarFallback className="bg-secondary text-foreground text-sm">
                         {getInitials(user.name, user.lastName)}
                       </AvatarFallback>
                     </Avatar>
@@ -867,27 +867,31 @@ export default function UsuariosPage() {
       )}
 
       {filteredUsers.length > ITEMS_PER_PAGE ? (
-        <div className="flex items-center justify-end gap-2">
+        <div className="ml-auto flex w-fit items-center gap-1.5 rounded-lg border border-border bg-card p-1.5">
           <Button
-            variant="outline"
-            size="sm"
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
             onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
             disabled={currentPage === 1}
           >
-            <ChevronLeft className="mr-1 h-4 w-4" />
-            Anterior
+            <ChevronLeft className="h-4 w-4" />
+            <span className="sr-only">Pagina anterior</span>
           </Button>
-          <span className="text-sm text-muted-foreground">
+
+          <span className="min-w-[132px] text-center text-sm tracking-[0.01em] text-muted-foreground">
             Pagina {currentPage} de {totalPages}
           </span>
+
           <Button
-            variant="outline"
-            size="sm"
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
             onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
             disabled={currentPage === totalPages}
           >
-            Siguiente
-            <ChevronRight className="ml-1 h-4 w-4" />
+            <ChevronRight className="h-4 w-4" />
+            <span className="sr-only">Pagina siguiente</span>
           </Button>
         </div>
       ) : null}
@@ -900,7 +904,7 @@ export default function UsuariosPage() {
                 <DialogTitle className="flex items-center gap-3">
                   <Avatar className="h-12 w-12">
                     <AvatarImage src={selectedUser.photo || ""} />
-                    <AvatarFallback className="bg-primary text-primary-foreground">
+                    <AvatarFallback className="bg-secondary text-foreground">
                       {getInitials(selectedUser.name, selectedUser.lastName)}
                     </AvatarFallback>
                   </Avatar>
@@ -922,7 +926,7 @@ export default function UsuariosPage() {
                 </TabsList>
 
                 <TabsContent value="info" className="space-y-4 mt-4">
-                  <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div className="grid gap-4 text-sm md:grid-cols-2">
                     <div>
                       <Label className="text-muted-foreground">Email</Label>
                       <p className="font-medium">{selectedUser.email}</p>
@@ -992,7 +996,7 @@ export default function UsuariosPage() {
             <DialogDescription>Actualiza toda la informacion del usuario.</DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label>Nombre *</Label>
                 <Input
@@ -1012,7 +1016,7 @@ export default function UsuariosPage() {
                 />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label>Email *</Label>
                 <Input
@@ -1033,7 +1037,7 @@ export default function UsuariosPage() {
                 />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label>Numero de empleado *</Label>
                 <Input
@@ -1056,7 +1060,7 @@ export default function UsuariosPage() {
                 />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label>Departamento *</Label>
                 <Select
@@ -1088,7 +1092,7 @@ export default function UsuariosPage() {
                 />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label>Rol</Label>
                 <Select
@@ -1166,8 +1170,8 @@ export default function UsuariosPage() {
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center gap-4">
-              <div className="p-3 rounded-xl bg-primary/10">
-                <Users className="h-6 w-6 text-primary" />
+              <div className="rounded-xl bg-secondary p-3">
+                <Users className="h-6 w-6 text-muted-foreground" />
               </div>
               <div>
                 <p className="text-2xl font-bold">{users.length}</p>
@@ -1179,8 +1183,8 @@ export default function UsuariosPage() {
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center gap-4">
-              <div className="p-3 rounded-xl bg-emerald-500/10">
-                <Users className="h-6 w-6 text-emerald-500" />
+              <div className="rounded-xl bg-secondary p-3">
+                <Users className="h-6 w-6 text-muted-foreground" />
               </div>
               <div>
                 <p className="text-2xl font-bold">{users.filter((user) => user.isActive).length}</p>
@@ -1192,8 +1196,8 @@ export default function UsuariosPage() {
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center gap-4">
-              <div className="p-3 rounded-xl bg-amber-500/10">
-                <Package className="h-6 w-6 text-amber-500" />
+              <div className="rounded-xl bg-secondary p-3">
+                <Package className="h-6 w-6 text-muted-foreground" />
               </div>
               <div>
                 <p className="text-2xl font-bold">
@@ -1207,8 +1211,8 @@ export default function UsuariosPage() {
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center gap-4">
-              <div className="p-3 rounded-xl bg-blue-500/10">
-                <FileText className="h-6 w-6 text-blue-500" />
+              <div className="rounded-xl bg-secondary p-3">
+                <FileText className="h-6 w-6 text-muted-foreground" />
               </div>
               <div>
                 <p className="text-2xl font-bold">

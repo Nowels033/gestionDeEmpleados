@@ -182,7 +182,7 @@ export default function ReportesPage() {
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="space-y-6"
+      className="space-y-8"
     >
       <DashboardPageHeader
         eyebrow="Inteligencia"
@@ -191,24 +191,26 @@ export default function ReportesPage() {
       />
 
       {/* Category Filters */}
-      <div className="flex flex-wrap gap-2">
-        <Button
-          variant={selectedCategory === null ? "default" : "outline"}
-          size="sm"
-          onClick={() => setSelectedCategory(null)}
-        >
-          Todos
-        </Button>
-        {categories.map((cat) => (
+      <div className="rounded-xl border border-border bg-card p-4 sm:p-5">
+        <div className="flex flex-wrap gap-2.5">
           <Button
-            key={cat}
-            variant={selectedCategory === cat ? "default" : "outline"}
+            variant={selectedCategory === null ? "default" : "outline"}
             size="sm"
-            onClick={() => setSelectedCategory(cat)}
+            onClick={() => setSelectedCategory(null)}
           >
-            {cat}
+            Todos
           </Button>
-        ))}
+          {categories.map((cat) => (
+            <Button
+              key={cat}
+              variant={selectedCategory === cat ? "default" : "outline"}
+              size="sm"
+              onClick={() => setSelectedCategory(cat)}
+            >
+              {cat}
+            </Button>
+          ))}
+        </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-4">
@@ -247,11 +249,11 @@ export default function ReportesPage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: index * 0.03 }}
           >
-            <Card className="overflow-hidden hover:shadow-lg transition-all duration-300 group h-full">
+            <Card className="group h-full overflow-hidden border-border transition-all duration-200 ease-in-out">
               <CardContent className="p-6 flex flex-col h-full">
                 <div className="flex items-start gap-4 mb-4">
-                  <div className="p-3 rounded-xl bg-primary/10">
-                    <report.icon className="h-6 w-6 text-primary" />
+                  <div className="rounded-xl bg-secondary p-3">
+                    <report.icon className="h-6 w-6 text-muted-foreground" />
                   </div>
                   <div className="flex-1">
                     <h3 className="font-semibold">{report.name}</h3>

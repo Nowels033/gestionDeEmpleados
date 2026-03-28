@@ -14,12 +14,13 @@ export function Toaster() {
           border: "1px solid hsl(var(--border))",
           borderRadius: "0.75rem",
           padding: "12px 16px",
-          boxShadow: "0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)",
+          boxShadow:
+            "0 1px 0 rgb(255 255 255 / 0.03) inset, 0 24px 40px -28px rgb(0 0 0 / 0.9)",
         },
         success: {
           iconTheme: {
-            primary: "#22c55e",
-            secondary: "#fff",
+            primary: "#00F2FE",
+            secondary: "#0A0A0A",
           },
         },
         error: {

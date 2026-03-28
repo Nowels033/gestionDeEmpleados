@@ -3,6 +3,8 @@
 import * as React from "react";
 import { motion } from "framer-motion";
 import {
+  Cpu,
+  HardDrive,
   Package,
   Plus,
   Search,
@@ -20,19 +22,23 @@ import {
   RotateCcw,
   ChevronLeft,
   ChevronRight,
+  Shield,
+  Laptop,
+  LucideIcon,
+  Monitor,
+  Server,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { SafeSelect } from "@/components/ui/select";
-import { Loading } from "@/components/ui/loading";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ConfirmActionDialog } from "@/components/ui/confirm-action-dialog";
 import { DashboardPageHeader } from "@/components/layout/dashboard-page-header";
 import { useFetch } from "@/lib/hooks/use-fetch";
 import { downloadCsv } from "@/lib/csv";
-import { cn, formatCurrency as formatEuro } from "@/lib/utils";
+import { formatCurrency as formatEuro } from "@/lib/utils";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -87,12 +93,72 @@ interface User {
   lastName: string;
 }
 
-const statusConfig: Record<string, { label: string; variant: "success" | "info" | "warning" | "destructive" }> = {
+const statusConfig: Record<
+  string,
+  { label: string; variant: "success" | "info" | "warning" | "destructive" | "secondary" }
+> = {
   AVAILABLE: { label: "Disponible", variant: "success" },
-  ASSIGNED: { label: "Asignado", variant: "info" },
-  MAINTENANCE: { label: "Mantenimiento", variant: "warning" },
+  ASSIGNED: { label: "Asignado", variant: "secondary" },
+  MAINTENANCE: { label: "Mantenimiento", variant: "info" },
   RETIRED: { label: "Dado de baja", variant: "destructive" },
 };
+
+const categoryIconByKeyword: { matcher: RegExp; icon: LucideIcon }[] = [
+  { matcher: /(laptop|notebook)/i, icon: Laptop },
+  { matcher: /(monitor|pantalla)/i, icon: Monitor },
+  { matcher: /(server|servidor)/i, icon: Server },
+  { matcher: /(disco|almacen|storage|ssd|hdd)/i, icon: HardDrive },
+  { matcher: /(cpu|procesador|equipo|desktop)/i, icon: Cpu },
+  { matcher: /(seguridad|security|firewall)/i, icon: Shield },
+];
+
+function getCategoryIcon(categoryName: string): LucideIcon {
+  return (
+    categoryIconByKeyword.find(({ matcher }) => matcher.test(categoryName))?.icon ??
+    Package
+  );
+}
+
+function AssetsLoadingSkeleton() {
+  return (
+    <div className="space-y-6" role="status" aria-live="polite" aria-busy="true">
+      <span className="sr-only">Cargando activos</span>
+
+      <div className="rounded-xl border border-border bg-card p-6">
+        <div className="h-3 w-24 animate-pulse rounded bg-muted/70" />
+        <div className="mt-4 h-8 w-48 animate-pulse rounded bg-muted/70" />
+        <div className="mt-3 h-4 w-72 max-w-full animate-pulse rounded bg-muted/70" />
+      </div>
+
+      <div className="rounded-xl border border-border bg-card p-5">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+          <div className="h-11 animate-pulse rounded-lg bg-muted/70 sm:col-span-2 xl:col-span-2" />
+          <div className="h-11 animate-pulse rounded-lg bg-muted/70" />
+          <div className="h-11 animate-pulse rounded-lg bg-muted/70" />
+          <div className="h-11 animate-pulse rounded-lg bg-muted/70" />
+          <div className="h-11 animate-pulse rounded-lg bg-muted/70" />
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-border bg-card p-4">
+        <div className="grid grid-cols-[1fr_2fr_1.6fr_1.3fr_1.4fr_1.4fr] gap-3 border-b border-border pb-3">
+          {[1, 2, 3, 4, 5, 6].map((index) => (
+            <div key={index} className="h-3 animate-pulse rounded bg-muted/70" />
+          ))}
+        </div>
+        <div className="space-y-3 pt-4">
+          {[1, 2, 3, 4, 5, 6, 7].map((index) => (
+            <div key={index} className="grid grid-cols-[1fr_2fr_1.6fr_1.3fr_1.4fr_1.4fr] gap-3">
+              {[1, 2, 3, 4, 5, 6].map((cell) => (
+                <div key={cell} className="h-4 animate-pulse rounded bg-muted/70" />
+              ))}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 const columnDefinitions = [
   { key: "code", label: "Codigo" },
@@ -705,14 +771,14 @@ export default function ActivosPage() {
   }, [filteredAssets, selectedAssetIds, selectedColumns]);
 
   if (loadingAssets) {
-    return <Loading text="Cargando activos..." />;
+    return <AssetsLoadingSkeleton />;
   }
 
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="space-y-6"
+      className="space-y-8"
     >
       <DashboardPageHeader
         eyebrow="Inventario"
@@ -763,7 +829,7 @@ export default function ActivosPage() {
                 <DialogDescription>Ingresa los datos del nuevo activo</DialogDescription>
               </DialogHeader>
               <div className="grid gap-4 py-4">
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-4 md:grid-cols-2">
                   <div className="space-y-2">
                     <Label>Nombre *</Label>
                     <Input
@@ -782,7 +848,7 @@ export default function ActivosPage() {
                     />
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-4 md:grid-cols-2">
                   <div className="space-y-2">
                     <Label>Marca</Label>
                     <Input
@@ -800,7 +866,7 @@ export default function ActivosPage() {
                     />
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-4 md:grid-cols-2">
                   <div className="space-y-2">
                     <Label>Número de Serie</Label>
                     <Input
@@ -819,7 +885,7 @@ export default function ActivosPage() {
                     />
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-4 md:grid-cols-2">
                   <div className="space-y-2">
                     <Label>Ubicación</Label>
                     <Input
@@ -875,95 +941,104 @@ export default function ActivosPage() {
       />
 
       {/* Filters */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Buscar activos..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10"
-          />
-        </div>
-        <div className="flex items-center gap-2">
-          <SafeSelect
-            value={selectedSavedView}
-            onValueChange={applySavedView}
-            placeholder="Vistas"
-            items={[
-              { value: "none", label: "Vista por defecto" },
-              ...savedViews.map((view) => ({ value: view.id, label: view.name })),
-            ]}
-            className="w-[180px]"
-          />
-          <Button variant="outline" size="sm" onClick={() => setSaveViewDialogOpen(true)}>
-            <Save className="h-4 w-4 mr-2" />
-            Guardar vista
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleDeleteSavedView}
-            disabled={selectedSavedView === "none"}
-          >
-            Eliminar vista
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              setSearchQuery("");
-              setStatusFilter("all");
-              setCategoryFilter("all");
-              setSelectedSavedView("none");
-            }}
-          >
-            <RotateCcw className="h-4 w-4 mr-2" />
-            Reset
-          </Button>
-          <SafeSelect
-            value={statusFilter}
-            onValueChange={setStatusFilter}
-            placeholder="Estado"
-            items={statusOptions}
-            className="w-[150px]"
-          />
-          <SafeSelect
-            value={categoryFilter}
-            onValueChange={setCategoryFilter}
-            placeholder="Categoría"
-            items={[{ value: "all", label: "Todas" }, ...categoryOptions]}
-            className="w-[150px]"
-          />
-          <div className="flex items-center border rounded-lg">
-            <Button
-              variant={viewMode === "grid" ? "secondary" : "ghost"}
-              size="icon"
-              className="rounded-r-none"
-              onClick={() => setViewMode("grid")}
-            >
-              <Grid3X3 className="h-4 w-4" />
+      <div className="rounded-xl border border-border bg-card p-4 sm:p-5">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+          <div className="relative w-full xl:max-w-md">
+            <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Buscar activos..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2.5">
+            <SafeSelect
+              value={selectedSavedView}
+              onValueChange={applySavedView}
+              placeholder="Vistas"
+              items={[
+                { value: "none", label: "Vista por defecto" },
+                ...savedViews.map((view) => ({ value: view.id, label: view.name })),
+              ]}
+              className="w-[190px]"
+            />
+
+            <Button variant="outline" size="sm" onClick={() => setSaveViewDialogOpen(true)}>
+              <Save className="mr-2 h-4 w-4" />
+              Guardar vista
             </Button>
+
             <Button
-              variant={viewMode === "list" ? "secondary" : "ghost"}
-              size="icon"
-              className="rounded-l-none"
-              onClick={() => setViewMode("list")}
+              variant="outline"
+              size="sm"
+              onClick={handleDeleteSavedView}
+              disabled={selectedSavedView === "none"}
             >
-              <List className="h-4 w-4" />
+              Eliminar vista
             </Button>
+
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setSearchQuery("");
+                setStatusFilter("all");
+                setCategoryFilter("all");
+                setSelectedSavedView("none");
+              }}
+            >
+              <RotateCcw className="mr-2 h-4 w-4" />
+              Reset
+            </Button>
+
+            <SafeSelect
+              value={statusFilter}
+              onValueChange={setStatusFilter}
+              placeholder="Estado"
+              items={statusOptions}
+              className="w-[160px]"
+            />
+
+            <SafeSelect
+              value={categoryFilter}
+              onValueChange={setCategoryFilter}
+              placeholder="Categoria"
+              items={[{ value: "all", label: "Todas" }, ...categoryOptions]}
+              className="w-[170px]"
+            />
+
+            <div className="flex items-center rounded-lg border border-border bg-secondary p-0.5">
+              <Button
+                variant={viewMode === "grid" ? "secondary" : "ghost"}
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => setViewMode("grid")}
+              >
+                <Grid3X3 className="h-4 w-4" />
+              </Button>
+              <Button
+                variant={viewMode === "list" ? "secondary" : "ghost"}
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => setViewMode("list")}
+              >
+                <List className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
         </div>
       </div>
 
       {/* Results */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm tracking-[0.01em] text-muted-foreground">
           Mostrando {firstVisibleIndex}-{lastVisibleIndex} de {filteredAssets.length} activos
         </p>
         {selectedAssetIds.length > 0 && (
-          <div className="fixed bottom-4 left-4 right-4 z-30 flex flex-wrap items-center gap-2 rounded-xl border border-border/70 bg-background/95 px-3 py-2 text-sm shadow-lg backdrop-blur md:left-auto md:right-6 md:max-w-fit">
-            <span className="font-medium">{selectedAssetIds.length} seleccionados</span>
+          <div className="fixed bottom-4 left-4 right-4 z-30 flex flex-wrap items-center gap-2 rounded-xl border border-border bg-card/95 px-3.5 py-2.5 text-sm shadow-[0_24px_40px_-30px_rgba(0,0,0,0.9)] backdrop-blur md:left-auto md:right-6 md:max-w-fit">
+            <span className="font-medium tracking-[0.01em]">{selectedAssetIds.length} seleccionados</span>
             <Button
               variant="outline"
               size="sm"
@@ -1013,101 +1088,112 @@ export default function ActivosPage() {
           onAction={() => setDialogOpen(true)}
         />
       ) : viewMode === "grid" ? (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {paginatedAssets.map((asset, index) => (
-            <motion.div
-              key={asset.id}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: index * 0.05 }}
-            >
-              <Card className="overflow-hidden hover:shadow-lg transition-all duration-300 group">
-                <div className="relative h-48 bg-gradient-to-br from-muted to-muted/50 flex items-center justify-center">
-                  <Package className="h-16 w-16 text-muted-foreground/30 group-hover:scale-110 transition-transform duration-300" />
-                  <Badge
-                    variant={statusConfig[asset.status]?.variant}
-                    className="absolute top-3 right-3"
-                  >
-                    {statusConfig[asset.status]?.label}
-                  </Badge>
-                  {asset.qrCode && (
-                    <Badge variant="outline" className="absolute bottom-3 left-3 bg-background/80">
-                      <QrCode className="h-3 w-3 mr-1" />
-                      {asset.qrCode}
-                    </Badge>
-                  )}
-                </div>
-                <CardContent className="p-4">
-                  <h3 className="font-semibold text-lg line-clamp-1">{asset.name}</h3>
-                  <p className="text-sm text-muted-foreground mb-3">
-                    {asset.brand} {asset.model && `• ${asset.model}`}
-                  </p>
-                  <div className="space-y-2 text-sm mb-4">
-                    <div className="flex items-center gap-2">
-                      <span className="text-muted-foreground">🏷️</span>
-                      <span>{asset.category.icon} {asset.category.name}</span>
+        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          {paginatedAssets.map((asset, index) => {
+            const CategoryIcon = getCategoryIcon(asset.category.name);
+
+            return (
+              <motion.div
+                key={asset.id}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: index * 0.04 }}
+              >
+                <Card className="group overflow-hidden border-border transition-all duration-200 ease-in-out hover:border-border hover:shadow-[0_24px_36px_-32px_rgba(0,0,0,0.95)]">
+                  <div className="relative flex h-48 items-center justify-center border-b border-border bg-[linear-gradient(160deg,#111111_0%,#0d0d0d_100%)]">
+                    <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-border bg-secondary transition-transform duration-200 ease-in-out group-hover:scale-[1.03]">
+                      <CategoryIcon className="h-7 w-7 text-muted-foreground" />
                     </div>
-                    {asset.currentValue && (
-                      <div className="flex items-center gap-2">
-                        <span className="text-muted-foreground">💰</span>
-                        <span className="font-medium">{formatCurrency(asset.currentValue)}</span>
-                      </div>
-                    )}
-                    <div className="flex items-center gap-2">
-                      <span className="text-muted-foreground">🔒</span>
-                      <span>{asset.securityUser.name} {asset.securityUser.lastName}</span>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 pt-2 border-t">
-                    <input
-                      type="checkbox"
-                      checked={selectedAssetIds.includes(asset.id)}
-                      onChange={() => toggleSelectedAsset(asset.id)}
-                      className="h-4 w-4 rounded border-input text-primary focus:ring-ring"
-                    />
-                    <Button variant="outline" size="sm" className="flex-1">
-                      <Eye className="h-4 w-4 mr-1" /> Ver
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="flex-1"
-                      onClick={() => openEditDialog(asset)}
+                    <Badge
+                      variant={statusConfig[asset.status]?.variant ?? "secondary"}
+                      className="absolute right-4 top-4"
                     >
-                      <Edit className="h-4 w-4 mr-1" /> Editar
-                    </Button>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="outline" size="icon" className="h-9 w-9">
-                          <MoreVertical className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem>
-                          <FileDown className="h-4 w-4 mr-2" /> PDF
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          className="text-destructive"
-                          onClick={() => openDeleteDialog(asset)}
-                        >
-                          <Trash2 className="h-4 w-4 mr-2" /> Eliminar
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                      {statusConfig[asset.status]?.label ?? asset.status}
+                    </Badge>
+                    {asset.qrCode ? (
+                      <Badge variant="outline" className="absolute bottom-4 left-4">
+                        <QrCode className="mr-1.5 h-3 w-3" />
+                        {asset.qrCode}
+                      </Badge>
+                    ) : null}
                   </div>
-                </CardContent>
-              </Card>
-            </motion.div>
-          ))}
+
+                  <CardContent className="space-y-4 p-5">
+                    <div>
+                      <h3 className="line-clamp-1 text-lg font-semibold tracking-[-0.01em]">{asset.name}</h3>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        {asset.brand ?? "Sin marca"} {asset.model ? `• ${asset.model}` : ""}
+                      </p>
+                    </div>
+
+                    <div className="space-y-2.5 text-sm">
+                      <div className="flex items-center gap-2 text-muted-foreground">
+                        <CategoryIcon className="h-4 w-4" />
+                        <span className="text-foreground">{asset.category.name}</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-muted-foreground">
+                        <Shield className="h-4 w-4" />
+                        <span className="text-foreground">
+                          {asset.securityUser.name} {asset.securityUser.lastName}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 text-muted-foreground">
+                        <Cpu className="h-4 w-4" />
+                        <span className="font-medium text-foreground">{formatCurrency(asset.currentValue)}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 border-t border-border pt-4">
+                      <input
+                        type="checkbox"
+                        checked={selectedAssetIds.includes(asset.id)}
+                        onChange={() => toggleSelectedAsset(asset.id)}
+                        className="h-4 w-4 rounded border-border bg-card text-primary focus:ring-primary/40"
+                      />
+                      <Button variant="outline" size="sm" className="flex-1">
+                        <Eye className="mr-1.5 h-4 w-4" /> Ver
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="flex-1"
+                        onClick={() => openEditDialog(asset)}
+                      >
+                        <Edit className="mr-1.5 h-4 w-4" /> Editar
+                      </Button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="outline" size="icon" className="h-9 w-9">
+                            <MoreVertical className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem>
+                            <FileDown className="mr-2 h-4 w-4" /> PDF
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            className="text-destructive"
+                            onClick={() => openDeleteDialog(asset)}
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" /> Eliminar
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            );
+          })}
         </div>
       ) : (
-        <Card>
-          <div className="overflow-x-auto max-h-[65vh]">
-            <table className="w-full min-w-[940px]">
+        <Card className="overflow-hidden border-border">
+          <div className="max-h-[68vh] overflow-x-auto scrollbar-thin">
+            <table className="w-full min-w-[980px]">
               <thead>
-                <tr className="border-b bg-muted/60 backdrop-blur-sm">
-                  <th className="sticky top-0 text-left p-4 bg-muted/80">
+                <tr className="border-b border-border bg-card/95">
+                  <th className="sticky top-0 bg-card px-5 py-4 text-left">
                     <input
                       type="checkbox"
                       checked={
@@ -1115,65 +1201,127 @@ export default function ActivosPage() {
                         paginatedAssets.every((asset) => selectedAssetIds.includes(asset.id))
                       }
                       onChange={toggleAllFilteredAssets}
-                      className="h-4 w-4 rounded border-input text-primary focus:ring-ring"
+                      className="h-4 w-4 rounded border-border bg-card text-primary focus:ring-primary/40"
                     />
                   </th>
-                  {selectedColumns.includes("code") && <th className="sticky top-0 text-left p-4 font-semibold text-xs uppercase tracking-[0.08em] text-muted-foreground bg-muted/80">Codigo</th>}
-                  {selectedColumns.includes("name") && <th className="sticky top-0 text-left p-4 font-semibold text-xs uppercase tracking-[0.08em] text-muted-foreground bg-muted/80">Nombre</th>}
-                  {selectedColumns.includes("category") && <th className="sticky top-0 text-left p-4 font-semibold text-xs uppercase tracking-[0.08em] text-muted-foreground bg-muted/80">Categoria</th>}
-                  {selectedColumns.includes("status") && <th className="sticky top-0 text-left p-4 font-semibold text-xs uppercase tracking-[0.08em] text-muted-foreground bg-muted/80">Estado</th>}
-                  {selectedColumns.includes("value") && <th className="sticky top-0 text-left p-4 font-semibold text-xs uppercase tracking-[0.08em] text-muted-foreground bg-muted/80">Valor</th>}
-                  {selectedColumns.includes("owner") && <th className="sticky top-0 text-left p-4 font-semibold text-xs uppercase tracking-[0.08em] text-muted-foreground bg-muted/80">Responsable</th>}
-                  <th className="sticky top-0 text-right p-4 font-semibold text-xs uppercase tracking-[0.08em] text-muted-foreground bg-muted/80">Acciones</th>
+                  {selectedColumns.includes("code") ? (
+                    <th className="sticky top-0 bg-card px-5 py-4 text-left text-xs font-medium uppercase tracking-[0.1em] text-muted-foreground">
+                      Codigo
+                    </th>
+                  ) : null}
+                  {selectedColumns.includes("name") ? (
+                    <th className="sticky top-0 bg-card px-5 py-4 text-left text-xs font-medium uppercase tracking-[0.1em] text-muted-foreground">
+                      Nombre
+                    </th>
+                  ) : null}
+                  {selectedColumns.includes("category") ? (
+                    <th className="sticky top-0 bg-card px-5 py-4 text-left text-xs font-medium uppercase tracking-[0.1em] text-muted-foreground">
+                      Categoria
+                    </th>
+                  ) : null}
+                  {selectedColumns.includes("status") ? (
+                    <th className="sticky top-0 bg-card px-5 py-4 text-left text-xs font-medium uppercase tracking-[0.1em] text-muted-foreground">
+                      Estado
+                    </th>
+                  ) : null}
+                  {selectedColumns.includes("value") ? (
+                    <th className="sticky top-0 bg-card px-5 py-4 text-left text-xs font-medium uppercase tracking-[0.1em] text-muted-foreground">
+                      Valor
+                    </th>
+                  ) : null}
+                  {selectedColumns.includes("owner") ? (
+                    <th className="sticky top-0 bg-card px-5 py-4 text-left text-xs font-medium uppercase tracking-[0.1em] text-muted-foreground">
+                      Responsable
+                    </th>
+                  ) : null}
+                  <th className="sticky top-0 bg-card px-5 py-4 text-right text-xs font-medium uppercase tracking-[0.1em] text-muted-foreground">
+                    Acciones
+                  </th>
                 </tr>
               </thead>
+
               <tbody>
-                {paginatedAssets.map((asset, index) => (
-                  <tr
-                    key={asset.id}
-                    className={cn(
-                      "border-b transition-colors hover:bg-muted/40",
-                      index % 2 === 0 ? "bg-background" : "bg-muted/10"
-                    )}
-                  >
-                    <td className="p-4">
-                      <input
-                        type="checkbox"
-                        checked={selectedAssetIds.includes(asset.id)}
-                        onChange={() => toggleSelectedAsset(asset.id)}
-                        className="h-4 w-4 rounded border-input text-primary focus:ring-ring"
-                      />
-                    </td>
-                    {selectedColumns.includes("code") && <td className="p-4 text-sm font-mono">{asset.qrCode || asset.id.slice(0, 8)}</td>}
-                    {selectedColumns.includes("name") && <td className="p-4">
-                      <p className="font-medium">{asset.name}</p>
-                      <p className="text-xs text-muted-foreground">{asset.brand} {asset.model}</p>
-                    </td>}
-                    {selectedColumns.includes("category") && <td className="p-4 text-sm">{asset.category.icon} {asset.category.name}</td>}
-                    {selectedColumns.includes("status") && <td className="p-4">
-                      <Badge variant={statusConfig[asset.status]?.variant}>
-                        {statusConfig[asset.status]?.label}
-                      </Badge>
-                    </td>}
-                    {selectedColumns.includes("value") && <td className="p-4 text-sm font-medium">{formatCurrency(asset.currentValue)}</td>}
-                    {selectedColumns.includes("owner") && <td className="p-4 text-sm">{asset.securityUser.name} {asset.securityUser.lastName}</td>}
-                    <td className="p-4">
-                      <div className="flex items-center justify-end gap-1">
-                        <Button variant="ghost" size="icon" className="h-8 w-8">
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8"
-                          onClick={() => openEditDialog(asset)}
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                {paginatedAssets.map((asset) => {
+                  const CategoryIcon = getCategoryIcon(asset.category.name);
+
+                  return (
+                    <tr
+                      key={asset.id}
+                      className="group border-b border-border/90 transition-all duration-200 ease-in-out hover:bg-card"
+                    >
+                      <td className="px-5 py-4 align-middle">
+                        <input
+                          type="checkbox"
+                          checked={selectedAssetIds.includes(asset.id)}
+                          onChange={() => toggleSelectedAsset(asset.id)}
+                          className="h-4 w-4 rounded border-border bg-card text-primary focus:ring-primary/40"
+                        />
+                      </td>
+
+                      {selectedColumns.includes("code") ? (
+                        <td className="px-5 py-4 text-sm font-mono tracking-[0.04em] text-foreground">
+                          {asset.qrCode || asset.id.slice(0, 8)}
+                        </td>
+                      ) : null}
+
+                      {selectedColumns.includes("name") ? (
+                        <td className="px-5 py-4 align-middle">
+                          <p className="text-sm font-medium text-foreground">{asset.name}</p>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {asset.brand || "Sin marca"} {asset.model ? `• ${asset.model}` : ""}
+                          </p>
+                        </td>
+                      ) : null}
+
+                      {selectedColumns.includes("category") ? (
+                        <td className="px-5 py-4 align-middle text-sm">
+                          <span className="inline-flex items-center gap-2.5">
+                            <span className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-border bg-secondary">
+                              <CategoryIcon className="h-4 w-4 text-muted-foreground" />
+                            </span>
+                            <span className="text-foreground">{asset.category.name}</span>
+                          </span>
+                        </td>
+                      ) : null}
+
+                      {selectedColumns.includes("status") ? (
+                        <td className="px-5 py-4 align-middle">
+                          <Badge variant={statusConfig[asset.status]?.variant ?? "secondary"}>
+                            {statusConfig[asset.status]?.label ?? asset.status}
+                          </Badge>
+                        </td>
+                      ) : null}
+
+                      {selectedColumns.includes("value") ? (
+                        <td className="px-5 py-4 text-sm font-medium text-foreground">
+                          {formatCurrency(asset.currentValue)}
+                        </td>
+                      ) : null}
+
+                      {selectedColumns.includes("owner") ? (
+                        <td className="px-5 py-4 text-sm text-foreground">
+                          {asset.securityUser.name} {asset.securityUser.lastName}
+                        </td>
+                      ) : null}
+
+                      <td className="px-5 py-4">
+                        <div className="flex items-center justify-end gap-1.5 opacity-100 transition-opacity duration-200 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100">
+                          <Button variant="ghost" size="icon" className="h-8 w-8">
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={() => openEditDialog(asset)}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -1181,27 +1329,31 @@ export default function ActivosPage() {
       )}
 
       {filteredAssets.length > ITEMS_PER_PAGE ? (
-        <div className="flex items-center justify-end gap-2">
+        <div className="ml-auto flex w-fit items-center gap-1.5 rounded-lg border border-border bg-card p-1.5">
           <Button
-            variant="outline"
-            size="sm"
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
             onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
             disabled={currentPage === 1}
           >
-            <ChevronLeft className="mr-1 h-4 w-4" />
-            Anterior
+            <ChevronLeft className="h-4 w-4" />
+            <span className="sr-only">Pagina anterior</span>
           </Button>
-          <span className="text-sm text-muted-foreground">
+
+          <span className="min-w-[132px] text-center text-sm tracking-[0.01em] text-muted-foreground">
             Pagina {currentPage} de {totalPages}
           </span>
+
           <Button
-            variant="outline"
-            size="sm"
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
             onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
             disabled={currentPage === totalPages}
           >
-            Siguiente
-            <ChevronRight className="ml-1 h-4 w-4" />
+            <ChevronRight className="h-4 w-4" />
+            <span className="sr-only">Pagina siguiente</span>
           </Button>
         </div>
       ) : null}
@@ -1242,7 +1394,7 @@ export default function ActivosPage() {
             <DialogDescription>Actualiza toda la informacion del activo.</DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label>Nombre *</Label>
                 <Input
@@ -1259,7 +1411,7 @@ export default function ActivosPage() {
                 />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label>Marca</Label>
                 <Input
@@ -1275,7 +1427,7 @@ export default function ActivosPage() {
                 />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label>Numero de serie</Label>
                 <Input
@@ -1293,7 +1445,7 @@ export default function ActivosPage() {
                 />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label>Precio de compra</Label>
                 <Input
@@ -1315,7 +1467,7 @@ export default function ActivosPage() {
                 />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label>Ubicacion</Label>
                 <Input
@@ -1332,7 +1484,7 @@ export default function ActivosPage() {
                 />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label>Nivel ENS</Label>
                 <SafeSelect

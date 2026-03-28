@@ -90,14 +90,13 @@ export default function ChatPage() {
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="h-[calc(100vh-12rem)] flex flex-col"
+      className="flex h-[calc(100vh-12rem)] flex-col gap-5"
     >
       <DashboardPageHeader
-        className="mb-4"
         eyebrow="Asistente"
         title={
           <span className="flex items-center gap-2">
-            <Bot className="h-7 w-7 text-primary" />
+            <Bot className="h-7 w-7 text-muted-foreground" />
             Chat IA
           </span>
         }
@@ -105,28 +104,28 @@ export default function ChatPage() {
       />
 
       {/* Chat Container */}
-      <Card className="flex-1 flex flex-col overflow-hidden">
+      <Card className="flex flex-1 flex-col overflow-hidden border-border">
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        <div className="scrollbar-thin flex-1 space-y-4 overflow-y-auto bg-[linear-gradient(180deg,#101010_0%,#0d0d0d_100%)] p-5">
           {messages.map((message) => (
             <motion.div
               key={message.id}
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              className={`flex ${
+              className={`flex w-full ${
                 message.role === "user" ? "justify-end" : "justify-start"
               }`}
             >
               <div
-                className={`flex gap-3 max-w-[80%] ${
+                className={`flex max-w-[85%] gap-3 md:max-w-[72%] ${
                   message.role === "user" ? "flex-row-reverse" : ""
                 }`}
               >
                 <div
-                  className={`shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
+                  className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border ${
                     message.role === "user"
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-muted"
+                      ? "border-border bg-secondary text-foreground"
+                      : "border-border bg-card text-muted-foreground"
                   }`}
                 >
                   {message.role === "user" ? (
@@ -136,13 +135,13 @@ export default function ChatPage() {
                   )}
                 </div>
                 <div
-                  className={`rounded-2xl px-4 py-3 ${
+                  className={`rounded-2xl border px-4 py-3 ${
                     message.role === "user"
-                      ? "bg-primary text-primary-foreground rounded-br-md"
-                      : "bg-muted rounded-bl-md"
+                      ? "rounded-br-md border-border bg-secondary text-foreground"
+                      : "rounded-bl-md border-border bg-card text-foreground"
                   }`}
                 >
-                  <div className="text-sm whitespace-pre-wrap">
+                  <div className="whitespace-pre-wrap text-sm tracking-[0.01em]">
                     {message.content.split("\n").map((line, i) => {
                       if (line.startsWith("**") && line.endsWith("**")) {
                         return (
@@ -173,22 +172,22 @@ export default function ChatPage() {
               className="flex justify-start"
             >
               <div className="flex gap-3">
-                <div className="shrink-0 w-8 h-8 rounded-full bg-muted flex items-center justify-center">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border bg-card text-muted-foreground">
                   <Bot className="h-4 w-4" />
                 </div>
-                <div className="rounded-2xl px-4 py-3 bg-muted rounded-bl-md">
+                <div className="rounded-2xl rounded-bl-md border border-border bg-card px-4 py-3">
                   <div className="flex items-center gap-2">
                     <div className="flex gap-1">
                       <span
-                        className="w-2 h-2 bg-primary/50 rounded-full animate-bounce"
+                        className="h-2 w-2 animate-bounce rounded-full bg-muted-foreground/45"
                         style={{ animationDelay: "0ms" }}
                       />
                       <span
-                        className="w-2 h-2 bg-primary/50 rounded-full animate-bounce"
+                        className="h-2 w-2 animate-bounce rounded-full bg-muted-foreground/45"
                         style={{ animationDelay: "150ms" }}
                       />
                       <span
-                        className="w-2 h-2 bg-primary/50 rounded-full animate-bounce"
+                        className="h-2 w-2 animate-bounce rounded-full bg-muted-foreground/45"
                         style={{ animationDelay: "300ms" }}
                       />
                     </div>
@@ -206,8 +205,8 @@ export default function ChatPage() {
 
         {/* Suggestions */}
         {messages.length <= 1 && (
-          <div className="px-4 pb-2">
-            <p className="text-xs text-muted-foreground mb-2 flex items-center gap-1">
+          <div className="border-t border-border px-5 pb-4 pt-3">
+            <p className="mb-2 flex items-center gap-1 text-xs uppercase tracking-[0.08em] text-muted-foreground">
               <Sparkles className="h-3 w-3" />
               Sugerencias
             </p>
@@ -229,7 +228,7 @@ export default function ChatPage() {
         )}
 
         {/* Input */}
-        <div className="p-4 border-t">
+        <div className="border-t border-border p-5">
           <form
             onSubmit={(e) => {
               e.preventDefault();
@@ -242,10 +241,11 @@ export default function ChatPage() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               disabled={isLoading}
-              className="flex-1"
+              className="h-11 flex-1"
             />
-            <Button type="submit" disabled={isLoading || !input.trim()}>
+            <Button type="submit" size="icon" className="h-11 w-11" disabled={isLoading || !input.trim()}>
               <Send className="h-4 w-4" />
+              <span className="sr-only">Enviar mensaje</span>
             </Button>
           </form>
         </div>

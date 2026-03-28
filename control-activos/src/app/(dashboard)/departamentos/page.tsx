@@ -297,7 +297,7 @@ export default function DepartamentosPage() {
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="space-y-6"
+      className="space-y-8"
     >
       <DashboardPageHeader
         eyebrow="Estructura"
@@ -388,13 +388,13 @@ export default function DepartamentosPage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: index * 0.05 }}
           >
-            <Card className="overflow-hidden hover:shadow-lg transition-all duration-300 group">
-              <div className="h-2 bg-gradient-to-r from-primary to-primary/50" />
+            <Card className="group overflow-hidden border-border transition-all duration-200 ease-in-out">
+              <div className="h-px bg-border" />
               <CardContent className="p-6">
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex items-center gap-3">
-                    <div className="p-3 rounded-xl bg-primary/10">
-                      <Building2 className="h-6 w-6 text-primary" />
+                    <div className="rounded-xl bg-secondary p-3">
+                      <Building2 className="h-6 w-6 text-muted-foreground" />
                     </div>
                     <div>
                       <h3 className="font-semibold text-lg">{dept.name}</h3>
@@ -564,7 +564,7 @@ export default function DepartamentosPage() {
                 </Select>
               </div>
 
-              <div className="rounded-lg border border-border/70 bg-muted/30 p-3 space-y-3">
+              <div className="space-y-3 rounded-lg border border-border bg-secondary/60 p-3">
                 <p className="text-sm font-medium">Crear departamento destino rapido</p>
                 <div className="space-y-2">
                   <Label htmlFor="new-target-name">Nombre</Label>
@@ -593,7 +593,7 @@ export default function DepartamentosPage() {
                 </Button>
               </div>
 
-              <div className="rounded-lg border border-border/70 bg-primary/5 p-3 text-sm space-y-2">
+              <div className="space-y-2 rounded-lg border border-border bg-secondary/60 p-3 text-sm">
                 <p className="font-medium">Impacto de la operacion</p>
                 <p className="text-muted-foreground">
                   Se moveran <strong>{selectedDepartment._count.users}</strong> usuarios,
@@ -606,7 +606,7 @@ export default function DepartamentosPage() {
               </div>
             </div>
           ) : selectedDepartment ? (
-            <div className="rounded-lg border border-border/70 bg-primary/5 p-3 text-sm space-y-2">
+            <div className="space-y-2 rounded-lg border border-border bg-secondary/60 p-3 text-sm">
               <p className="font-medium">Impacto de la operacion</p>
               <p className="text-muted-foreground">
                 Este departamento no tiene usuarios. Se eliminaran sus datos base y las
@@ -660,8 +660,8 @@ export default function DepartamentosPage() {
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center gap-4">
-              <div className="p-3 rounded-xl bg-primary/10">
-                <Building2 className="h-6 w-6 text-primary" />
+              <div className="rounded-xl bg-secondary p-3">
+                <Building2 className="h-6 w-6 text-muted-foreground" />
               </div>
               <div>
                 <p className="text-2xl font-bold">{departments.length}</p>
@@ -673,8 +673,8 @@ export default function DepartamentosPage() {
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center gap-4">
-              <div className="p-3 rounded-xl bg-emerald-500/10">
-                <Users className="h-6 w-6 text-emerald-500" />
+              <div className="rounded-xl bg-secondary p-3">
+                <Users className="h-6 w-6 text-muted-foreground" />
               </div>
               <div>
                 <p className="text-2xl font-bold">
@@ -688,8 +688,8 @@ export default function DepartamentosPage() {
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center gap-4">
-              <div className="p-3 rounded-xl bg-amber-500/10">
-                <Package className="h-6 w-6 text-amber-500" />
+              <div className="rounded-xl bg-secondary p-3">
+                <Package className="h-6 w-6 text-muted-foreground" />
               </div>
               <div>
                 <p className="text-2xl font-bold">
@@ -703,8 +703,8 @@ export default function DepartamentosPage() {
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center gap-4">
-              <div className="p-3 rounded-xl bg-purple-500/10">
-                <span className="text-purple-500 font-bold">💰</span>
+              <div className="rounded-xl bg-secondary p-3">
+                <span className="font-bold text-muted-foreground">💰</span>
               </div>
               <div>
                 <p className="text-lg font-bold">

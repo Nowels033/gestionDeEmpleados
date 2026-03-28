@@ -89,7 +89,7 @@ const statusLabels: Record<string, string> = {
   RETIRED: "Dado de baja",
 };
 
-const COLORS = ["#6366f1", "#22c55e", "#f59e0b", "#3b82f6", "#ec4899", "#8b5cf6"];
+const COLORS = ["#3C3C3C", "#595959", "#727272", "#8B8B8B", "#A5A5A5", "#C0C0C0"];
 
 const container = {
   hidden: { opacity: 0 },
@@ -130,8 +130,8 @@ export default function DashboardPage() {
       title: "Total Activos",
       value: stats.totalAssets.toString(),
       icon: Package,
-      color: "text-blue-500",
-      bgColor: "bg-blue-500/10",
+      color: "text-foreground",
+      bgColor: "bg-secondary",
     },
     {
       title: "Asignados",
@@ -140,22 +140,22 @@ export default function DashboardPage() {
         ? `${Math.round((stats.assignedAssets / stats.totalAssets) * 100)}%`
         : "0%",
       icon: CheckCircle,
-      color: "text-emerald-500",
-      bgColor: "bg-emerald-500/10",
+      color: "text-muted-foreground",
+      bgColor: "bg-secondary",
     },
     {
       title: "En Mantenimiento",
       value: stats.maintenanceAssets.toString(),
       icon: AlertTriangle,
-      color: "text-amber-500",
-      bgColor: "bg-amber-500/10",
+      color: "text-muted-foreground",
+      bgColor: "bg-secondary",
     },
     {
       title: "Valor Total",
       value: formatCurrency(stats.totalValue),
       icon: TrendingUp,
-      color: "text-purple-500",
-      bgColor: "bg-purple-500/10",
+      color: "text-foreground",
+      bgColor: "bg-secondary",
     },
   ];
 
@@ -177,7 +177,7 @@ export default function DashboardPage() {
       {/* Stats Cards */}
       <motion.div variants={item} className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         {statsCards.map((stat, index) => (
-          <Card key={index} className="overflow-hidden">
+          <Card key={index} className="overflow-hidden border-border">
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div className="space-y-1">
@@ -186,7 +186,7 @@ export default function DashboardPage() {
                   </p>
                   <p className="text-2xl font-bold">{stat.value}</p>
                   {stat.change && (
-                    <div className="flex items-center gap-1 text-xs text-emerald-500">
+                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
                       <ArrowUpRight className="h-3 w-3" />
                       {stat.change}
                     </div>
@@ -222,7 +222,7 @@ export default function DashboardPage() {
                         borderRadius: "0.75rem",
                       }}
                     />
-                    <Bar dataKey="value" radius={[6, 6, 0, 0]} fill="hsl(var(--primary))" />
+                    <Bar dataKey="value" radius={[6, 6, 0, 0]} fill="#5C5C5C" />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -288,11 +288,11 @@ export default function DashboardPage() {
                 {recentAssets.map((asset) => (
                   <div
                     key={asset.id}
-                    className="flex items-center justify-between p-3 rounded-lg bg-muted/30"
+                    className="flex items-center justify-between rounded-lg border border-border bg-secondary/70 p-3"
                   >
                     <div className="flex items-center gap-3">
-                      <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-primary/10">
-                        <Package className="h-5 w-5 text-primary" />
+                      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-secondary">
+                        <Package className="h-5 w-5 text-muted-foreground" />
                       </div>
                       <div>
                         <p className="font-medium text-sm">{asset.name}</p>
@@ -325,11 +325,11 @@ export default function DashboardPage() {
                 {departmentStats.map((dept, index) => (
                   <div
                     key={index}
-                    className="flex items-center justify-between p-3 rounded-lg bg-muted/30"
+                    className="flex items-center justify-between rounded-lg border border-border bg-secondary/70 p-3"
                   >
                     <div className="flex items-center gap-3">
-                      <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-blue-500/10">
-                        <Building2 className="h-5 w-5 text-blue-500" />
+                      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-secondary">
+                        <Building2 className="h-5 w-5 text-muted-foreground" />
                       </div>
                       <div>
                         <p className="font-medium text-sm">{dept.name}</p>
@@ -354,8 +354,8 @@ export default function DashboardPage() {
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center gap-4">
-              <div className="p-3 rounded-xl bg-primary/10">
-                <Users className="h-6 w-6 text-primary" />
+              <div className="rounded-xl bg-secondary p-3">
+                <Users className="h-6 w-6 text-muted-foreground" />
               </div>
               <div>
                 <p className="text-2xl font-bold">{stats.totalUsers}</p>
@@ -367,8 +367,8 @@ export default function DashboardPage() {
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center gap-4">
-              <div className="p-3 rounded-xl bg-emerald-500/10">
-                <CheckCircle className="h-6 w-6 text-emerald-500" />
+              <div className="rounded-xl bg-secondary p-3">
+                <CheckCircle className="h-6 w-6 text-muted-foreground" />
               </div>
               <div>
                 <p className="text-2xl font-bold">{stats.availableAssets}</p>
@@ -380,8 +380,8 @@ export default function DashboardPage() {
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center gap-4">
-              <div className="p-3 rounded-xl bg-amber-500/10">
-                <Building2 className="h-6 w-6 text-amber-500" />
+              <div className="rounded-xl bg-secondary p-3">
+                <Building2 className="h-6 w-6 text-muted-foreground" />
               </div>
               <div>
                 <p className="text-2xl font-bold">{departmentStats.length}</p>

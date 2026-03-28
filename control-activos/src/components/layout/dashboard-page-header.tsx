@@ -19,19 +19,23 @@ export function DashboardPageHeader({
   return (
     <div
       className={cn(
-        "rounded-2xl border border-border/70 bg-gradient-to-r from-background/95 via-background/90 to-primary/10 p-4 shadow-sm md:p-5",
+        "rounded-xl border border-border bg-card px-6 py-5 shadow-[0_1px_0_rgba(255,255,255,0.03)_inset] md:px-7 md:py-6",
         className
       )}
     >
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div className="space-y-1">
+        <div className="space-y-2">
           {eyebrow ? (
-            <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">{eyebrow}</p>
+            <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">{eyebrow}</p>
           ) : null}
-          <h1 className="text-2xl font-bold tracking-tight md:text-3xl">{title}</h1>
-          {description ? <p className="text-sm text-muted-foreground md:text-base">{description}</p> : null}
+          <h1 className="text-2xl font-semibold tracking-[-0.02em] md:text-3xl">{title}</h1>
+          {description ? (
+            <p className="text-sm font-normal tracking-[0.01em] text-muted-foreground md:text-base">
+              {description}
+            </p>
+          ) : null}
         </div>
-        {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
+        {actions ? <div className="flex flex-wrap items-center gap-2.5">{actions}</div> : null}
       </div>
     </div>
   );
