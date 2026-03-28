@@ -17,6 +17,9 @@ import {
   Eye,
   UserCheck,
   UserX,
+  Upload,
+  Image as ImageIcon,
+  Download,
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
@@ -58,6 +61,8 @@ import { Switch } from "@/components/ui/switch";
 import { DashboardPageHeader } from "@/components/layout/dashboard-page-header";
 import { useFetch } from "@/lib/hooks/use-fetch";
 import { downloadCsv } from "@/lib/csv";
+import { APP_COMMAND_EVENT, consumePendingAppCommand } from "@/lib/command-bus";
+import { uploadFileToServer } from "@/lib/upload-client";
 import toast from "react-hot-toast";
 
 interface User {
@@ -80,6 +85,17 @@ interface User {
     assignments: number;
     documents: number;
   };
+  documents: UserDocument[];
+}
+
+interface UserDocument {
+  id: string;
+  name: string;
+  type: "INE" | "CONTRATO" | "DOMICILIO" | "LICENCIA" | "CV" | "CERTIFICADO" | "OTRO";
+  fileUrl: string;
+  fileSize: number;
+  mimeType: string;
+  uploadedAt: string;
 }
 
 interface Department {
@@ -124,6 +140,7 @@ export default function UsuariosPage() {
     hireDate: "",
     role: "USER" as "ADMIN" | "EDITOR" | "USER",
     isActive: true,
+    photo: "",
     password: "",
   });
   const [formData, setFormData] = React.useState({
@@ -138,6 +155,15 @@ export default function UsuariosPage() {
     role: "USER" as "ADMIN" | "EDITOR" | "USER",
     password: "",
   });
+  const [userPhotoFile, setUserPhotoFile] = React.useState<File | null>(null);
+  const [userDocumentFile, setUserDocumentFile] = React.useState<File | null>(null);
+  const [userDocumentType, setUserDocumentType] = React.useState<
+    "INE" | "CONTRATO" | "DOMICILIO" | "LICENCIA" | "CV" | "CERTIFICADO" | "OTRO"
+  >("OTRO");
+  const [userDocumentName, setUserDocumentName] = React.useState("");
+  const [uploadingUserPhoto, setUploadingUserPhoto] = React.useState(false);
+  const [uploadingUserDocument, setUploadingUserDocument] = React.useState(false);
+  const [deletingUserDocumentId, setDeletingUserDocumentId] = React.useState<string | null>(null);
 
   const filteredUsers = React.useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLowerCase();
@@ -166,7 +192,7 @@ export default function UsuariosPage() {
     return `${name.charAt(0)}${lastName.charAt(0)}`.toUpperCase();
   };
 
-  const resetForm = () => {
+  const resetForm = React.useCallback(() => {
     setFormData({
       name: "",
       lastName: "",
@@ -179,7 +205,7 @@ export default function UsuariosPage() {
       role: "USER",
       password: "",
     });
-  };
+  }, []);
 
   React.useEffect(() => {
     if (filtersHydrated) {
@@ -275,6 +301,7 @@ export default function UsuariosPage() {
       hireDate: new Date(user.hireDate).toISOString().slice(0, 10),
       role: user.role,
       isActive: user.isActive,
+      photo: user.photo || "",
       password: "",
     });
     setEditDialogOpen(true);
@@ -314,6 +341,7 @@ export default function UsuariosPage() {
           hireDate: editFormData.hireDate,
           role: editFormData.role,
           isActive: editFormData.isActive,
+          photo: editFormData.photo.trim() || null,
           password: editFormData.password.trim() || undefined,
         }),
       });
@@ -331,6 +359,142 @@ export default function UsuariosPage() {
       toast.error("No fue posible actualizar");
     } finally {
       setActionLoading(false);
+    }
+  };
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes < 1024) {
+      return `${bytes} B`;
+    }
+
+    if (bytes < 1024 * 1024) {
+      return `${(bytes / 1024).toFixed(1)} KB`;
+    }
+
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
+  const handleUploadUserPhoto = async () => {
+    if (!selectedUser || !userPhotoFile) {
+      toast.error("Selecciona una foto para subir");
+      return;
+    }
+
+    try {
+      setUploadingUserPhoto(true);
+      const upload = await uploadFileToServer(userPhotoFile, "user-photos");
+
+      const response = await fetch(`/api/usuarios/${selectedUser.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ photo: upload.fileUrl }),
+      });
+
+      const body = await response.json().catch(() => null);
+      if (!response.ok) {
+        toast.error(body?.error ?? "No fue posible actualizar la foto");
+        return;
+      }
+
+      setSelectedUser((prev) => (prev ? { ...prev, photo: upload.fileUrl } : prev));
+      setEditFormData((prev) => ({ ...prev, photo: upload.fileUrl }));
+      setUserPhotoFile(null);
+      refetch();
+      toast.success("Foto de usuario actualizada");
+    } catch {
+      toast.error("No fue posible subir la foto");
+    } finally {
+      setUploadingUserPhoto(false);
+    }
+  };
+
+  const handleUploadUserDocument = async () => {
+    if (!selectedUser || !userDocumentFile) {
+      toast.error("Selecciona un documento para subir");
+      return;
+    }
+
+    try {
+      setUploadingUserDocument(true);
+      const upload = await uploadFileToServer(userDocumentFile, "user-documents");
+
+      const response = await fetch(`/api/usuarios/${selectedUser.id}/documentos`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: userDocumentName.trim() || upload.fileName,
+          type: userDocumentType,
+          fileUrl: upload.fileUrl,
+          fileSize: upload.fileSize,
+          mimeType: upload.mimeType,
+        }),
+      });
+
+      const body = await response.json().catch(() => null);
+      if (!response.ok || !body) {
+        toast.error(body?.error ?? "No fue posible guardar el documento");
+        return;
+      }
+
+      setSelectedUser((prev) =>
+        prev
+          ? {
+              ...prev,
+              documents: [body, ...prev.documents],
+              _count: {
+                ...prev._count,
+                documents: prev._count.documents + 1,
+              },
+            }
+          : prev
+      );
+      setUserDocumentFile(null);
+      setUserDocumentName("");
+      refetch();
+      toast.success("Documento cargado");
+    } catch {
+      toast.error("No fue posible subir el documento");
+    } finally {
+      setUploadingUserDocument(false);
+    }
+  };
+
+  const handleDeleteUserDocument = async (documentId: string) => {
+    if (!selectedUser) {
+      return;
+    }
+
+    try {
+      setDeletingUserDocumentId(documentId);
+      const response = await fetch(
+        `/api/usuarios/${selectedUser.id}/documentos/${documentId}`,
+        { method: "DELETE" }
+      );
+
+      const body = await response.json().catch(() => null);
+      if (!response.ok) {
+        toast.error(body?.error ?? "No fue posible eliminar el documento");
+        return;
+      }
+
+      setSelectedUser((prev) =>
+        prev
+          ? {
+              ...prev,
+              documents: prev.documents.filter((document) => document.id !== documentId),
+              _count: {
+                ...prev._count,
+                documents: Math.max(prev._count.documents - 1, 0),
+              },
+            }
+          : prev
+      );
+      refetch();
+      toast.success("Documento eliminado");
+    } catch {
+      toast.error("No fue posible eliminar el documento");
+    } finally {
+      setDeletingUserDocumentId(null);
     }
   };
 
@@ -487,6 +651,38 @@ export default function UsuariosPage() {
     );
     toast.success("CSV exportado correctamente");
   };
+
+  const executeQuickCommand = React.useCallback(
+    (command: string) => {
+      if (command === "new-user") {
+        resetForm();
+        setDialogOpen(true);
+      }
+    },
+    [resetForm]
+  );
+
+  React.useEffect(() => {
+    const onCommand = (event: Event) => {
+      const detail = (event as CustomEvent<{ command?: string }>).detail;
+      if (!detail?.command) {
+        return;
+      }
+
+      executeQuickCommand(detail.command);
+    };
+
+    window.addEventListener(APP_COMMAND_EVENT, onCommand as EventListener);
+
+    const pendingCommand = consumePendingAppCommand();
+    if (pendingCommand) {
+      executeQuickCommand(pendingCommand);
+    }
+
+    return () => {
+      window.removeEventListener(APP_COMMAND_EVENT, onCommand as EventListener);
+    };
+  }, [executeQuickCommand]);
 
   React.useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -896,7 +1092,18 @@ export default function UsuariosPage() {
         </div>
       ) : null}
 
-      <Dialog open={detailDialogOpen} onOpenChange={setDetailDialogOpen}>
+      <Dialog
+        open={detailDialogOpen}
+        onOpenChange={(open) => {
+          setDetailDialogOpen(open);
+          if (!open) {
+            setUserPhotoFile(null);
+            setUserDocumentFile(null);
+            setUserDocumentName("");
+            setDeletingUserDocumentId(null);
+          }
+        }}
+      >
         <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
           {selectedUser && (
             <>
@@ -920,9 +1127,10 @@ export default function UsuariosPage() {
               </DialogHeader>
 
               <Tabs defaultValue="info" className="mt-4">
-                <TabsList className="grid w-full grid-cols-2">
+                <TabsList className="grid w-full grid-cols-3">
                   <TabsTrigger value="info">Informacion</TabsTrigger>
                   <TabsTrigger value="assets">Activos</TabsTrigger>
+                  <TabsTrigger value="documents">Documentos</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="info" className="space-y-4 mt-4">
@@ -965,6 +1173,40 @@ export default function UsuariosPage() {
                       {selectedUser.isActive ? "Activo" : "Inactivo"}
                     </Badge>
                   </div>
+
+                  <Separator />
+
+                  <div className="rounded-lg border border-border bg-card p-4">
+                    <p className="text-xs uppercase tracking-[0.08em] text-muted-foreground">
+                      Foto de perfil
+                    </p>
+
+                    <div className="mt-3 flex flex-wrap items-center gap-3">
+                      <Avatar className="h-14 w-14 border border-border">
+                        <AvatarImage src={selectedUser.photo || ""} />
+                        <AvatarFallback className="bg-secondary text-foreground">
+                          {getInitials(selectedUser.name, selectedUser.lastName)}
+                        </AvatarFallback>
+                      </Avatar>
+
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Input
+                          type="file"
+                          accept="image/*"
+                          className="max-w-[240px]"
+                          onChange={(event) => setUserPhotoFile(event.target.files?.[0] || null)}
+                        />
+                        <Button
+                          size="sm"
+                          onClick={handleUploadUserPhoto}
+                          disabled={!userPhotoFile || uploadingUserPhoto}
+                        >
+                          <ImageIcon className="mr-2 h-4 w-4" />
+                          {uploadingUserPhoto ? "Subiendo..." : "Actualizar foto"}
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
                 </TabsContent>
 
                 <TabsContent value="assets" className="space-y-4 mt-4">
@@ -975,6 +1217,102 @@ export default function UsuariosPage() {
                     <Package className="h-12 w-12 mx-auto mb-2 opacity-30" />
                     <p>El detalle de activos se mostrara en una siguiente iteracion</p>
                   </div>
+                </TabsContent>
+
+                <TabsContent value="documents" className="space-y-4 mt-4">
+                  <div className="rounded-lg border border-border bg-card p-4">
+                    <p className="text-xs uppercase tracking-[0.08em] text-muted-foreground">
+                      Cargar documento
+                    </p>
+
+                    <div className="mt-3 grid gap-3 md:grid-cols-3">
+                      <Input
+                        placeholder="Nombre del documento"
+                        value={userDocumentName}
+                        onChange={(event) => setUserDocumentName(event.target.value)}
+                      />
+
+                      <Select
+                        value={userDocumentType}
+                        onValueChange={(value: typeof userDocumentType) =>
+                          setUserDocumentType(value)
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="INE">INE</SelectItem>
+                          <SelectItem value="CONTRATO">Contrato</SelectItem>
+                          <SelectItem value="DOMICILIO">Comprobante domicilio</SelectItem>
+                          <SelectItem value="LICENCIA">Licencia</SelectItem>
+                          <SelectItem value="CV">CV</SelectItem>
+                          <SelectItem value="CERTIFICADO">Certificado</SelectItem>
+                          <SelectItem value="OTRO">Otro</SelectItem>
+                        </SelectContent>
+                      </Select>
+
+                      <Input
+                        type="file"
+                        accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx"
+                        onChange={(event) =>
+                          setUserDocumentFile(event.target.files?.[0] || null)
+                        }
+                      />
+                    </div>
+
+                    <Button
+                      className="mt-3"
+                      size="sm"
+                      onClick={handleUploadUserDocument}
+                      disabled={!userDocumentFile || uploadingUserDocument}
+                    >
+                      <Upload className="mr-2 h-4 w-4" />
+                      {uploadingUserDocument ? "Subiendo..." : "Subir documento"}
+                    </Button>
+                  </div>
+
+                  {selectedUser.documents.length > 0 ? (
+                    <ul className="space-y-2">
+                      {selectedUser.documents.map((document) => (
+                        <li
+                          key={document.id}
+                          className="flex items-center justify-between gap-2 rounded-lg border border-border bg-card px-3 py-2"
+                        >
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-medium text-foreground">
+                              {document.name}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {document.type} • {formatFileSize(document.fileSize)}
+                            </p>
+                          </div>
+
+                          <div className="flex items-center gap-1">
+                            <Button variant="ghost" size="icon" className="h-7 w-7" asChild>
+                              <a href={document.fileUrl} target="_blank" rel="noreferrer">
+                                <Download className="h-4 w-4" />
+                                <span className="sr-only">Descargar documento</span>
+                              </a>
+                            </Button>
+
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7"
+                              onClick={() => handleDeleteUserDocument(document.id)}
+                              disabled={deletingUserDocumentId === document.id}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                              <span className="sr-only">Eliminar documento</span>
+                            </Button>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">No hay documentos cargados.</p>
+                  )}
                 </TabsContent>
               </Tabs>
 
