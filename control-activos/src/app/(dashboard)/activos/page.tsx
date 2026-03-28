@@ -18,6 +18,8 @@ import {
   Save,
   Check,
   RotateCcw,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,7 +32,7 @@ import { ConfirmActionDialog } from "@/components/ui/confirm-action-dialog";
 import { DashboardPageHeader } from "@/components/layout/dashboard-page-header";
 import { useFetch } from "@/lib/hooks/use-fetch";
 import { downloadCsv } from "@/lib/csv";
-import { cn } from "@/lib/utils";
+import { cn, formatCurrency as formatEuro } from "@/lib/utils";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -117,8 +119,8 @@ export default function ActivosPage() {
   const VIEWS_STORAGE_KEY = "activos.saved-views.v1";
 
   const { data: assets, loading: loadingAssets, refetch: refetchAssets } = useFetch<Asset[]>("/api/activos", []);
-  const { data: categories } = useFetch<Category[]>("/api/categorias", []);
-  const { data: users } = useFetch<User[]>("/api/usuarios", []);
+  const { data: categories } = useFetch<Category[]>("/api/categorias?view=options", []);
+  const { data: users } = useFetch<User[]>("/api/usuarios?view=options", []);
 
   const [viewMode, setViewMode] = React.useState<"grid" | "list">("grid");
   const [searchQuery, setSearchQuery] = React.useState("");
@@ -146,6 +148,8 @@ export default function ActivosPage() {
   const [selectedSavedView, setSelectedSavedView] = React.useState("none");
   const [saveViewDialogOpen, setSaveViewDialogOpen] = React.useState(false);
   const [newViewName, setNewViewName] = React.useState("");
+  const [currentPage, setCurrentPage] = React.useState(1);
+  const ITEMS_PER_PAGE = 24;
   const [editFormData, setEditFormData] = React.useState({
     name: "",
     description: "",
@@ -418,7 +422,7 @@ export default function ActivosPage() {
   };
 
   const toggleAllFilteredAssets = () => {
-    const allVisibleIds = filteredAssets.map((asset) => asset.id);
+    const allVisibleIds = paginatedAssets.map((asset) => asset.id);
     const allSelected =
       allVisibleIds.length > 0 && allVisibleIds.every((assetId) => selectedAssetIds.includes(assetId));
 
@@ -618,23 +622,43 @@ export default function ActivosPage() {
     toast.success("CSV exportado correctamente");
   };
 
-  const filteredAssets = assets.filter((asset) => {
-    const matchesSearch =
-      asset.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (asset.serialNumber?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false) ||
-      (asset.qrCode?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false);
-    const matchesStatus = statusFilter === "all" || asset.status === statusFilter;
-    const matchesCategory = categoryFilter === "all" || asset.category.id === categoryFilter;
-    return matchesSearch && matchesStatus && matchesCategory;
-  });
+  const filteredAssets = React.useMemo(() => {
+    const normalizedQuery = searchQuery.trim().toLowerCase();
+
+    return assets.filter((asset) => {
+      const matchesSearch =
+        asset.name.toLowerCase().includes(normalizedQuery) ||
+        (asset.serialNumber?.toLowerCase().includes(normalizedQuery) ?? false) ||
+        (asset.qrCode?.toLowerCase().includes(normalizedQuery) ?? false);
+      const matchesStatus = statusFilter === "all" || asset.status === statusFilter;
+      const matchesCategory = categoryFilter === "all" || asset.category.id === categoryFilter;
+      return matchesSearch && matchesStatus && matchesCategory;
+    });
+  }, [assets, searchQuery, statusFilter, categoryFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredAssets.length / ITEMS_PER_PAGE));
+
+  const paginatedAssets = React.useMemo(() => {
+    const start = (currentPage - 1) * ITEMS_PER_PAGE;
+    return filteredAssets.slice(start, start + ITEMS_PER_PAGE);
+  }, [filteredAssets, currentPage]);
+
+  const firstVisibleIndex = filteredAssets.length === 0 ? 0 : (currentPage - 1) * ITEMS_PER_PAGE + 1;
+  const lastVisibleIndex = Math.min(currentPage * ITEMS_PER_PAGE, filteredAssets.length);
+
+  React.useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, statusFilter, categoryFilter]);
+
+  React.useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
 
   const formatCurrency = (value: number | null) => {
     if (!value) return "-";
-    return new Intl.NumberFormat("es-MX", {
-      style: "currency",
-      currency: "MXN",
-      minimumFractionDigits: 0,
-    }).format(value);
+    return formatEuro(value);
   };
 
   // Preparar opciones para selects
@@ -935,7 +959,7 @@ export default function ActivosPage() {
       {/* Results */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-muted-foreground">
-          Mostrando {filteredAssets.length} de {assets.length} activos
+          Mostrando {firstVisibleIndex}-{lastVisibleIndex} de {filteredAssets.length} activos
         </p>
         {selectedAssetIds.length > 0 && (
           <div className="fixed bottom-4 left-4 right-4 z-30 flex flex-wrap items-center gap-2 rounded-xl border border-border/70 bg-background/95 px-3 py-2 text-sm shadow-lg backdrop-blur md:left-auto md:right-6 md:max-w-fit">
@@ -990,7 +1014,7 @@ export default function ActivosPage() {
         />
       ) : viewMode === "grid" ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {filteredAssets.map((asset, index) => (
+          {paginatedAssets.map((asset, index) => (
             <motion.div
               key={asset.id}
               initial={{ opacity: 0, y: 20 }}
@@ -1087,8 +1111,8 @@ export default function ActivosPage() {
                     <input
                       type="checkbox"
                       checked={
-                        filteredAssets.length > 0 &&
-                        filteredAssets.every((asset) => selectedAssetIds.includes(asset.id))
+                        paginatedAssets.length > 0 &&
+                        paginatedAssets.every((asset) => selectedAssetIds.includes(asset.id))
                       }
                       onChange={toggleAllFilteredAssets}
                       className="h-4 w-4 rounded border-input text-primary focus:ring-ring"
@@ -1104,7 +1128,7 @@ export default function ActivosPage() {
                 </tr>
               </thead>
               <tbody>
-                {filteredAssets.map((asset, index) => (
+                {paginatedAssets.map((asset, index) => (
                   <tr
                     key={asset.id}
                     className={cn(
@@ -1155,6 +1179,32 @@ export default function ActivosPage() {
           </div>
         </Card>
       )}
+
+      {filteredAssets.length > ITEMS_PER_PAGE ? (
+        <div className="flex items-center justify-end gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+            disabled={currentPage === 1}
+          >
+            <ChevronLeft className="mr-1 h-4 w-4" />
+            Anterior
+          </Button>
+          <span className="text-sm text-muted-foreground">
+            Pagina {currentPage} de {totalPages}
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+            disabled={currentPage === totalPages}
+          >
+            Siguiente
+            <ChevronRight className="ml-1 h-4 w-4" />
+          </Button>
+        </div>
+      ) : null}
 
       <Dialog open={saveViewDialogOpen} onOpenChange={setSaveViewDialogOpen}>
         <DialogContent>

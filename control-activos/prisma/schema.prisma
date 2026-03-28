@@ -42,6 +42,10 @@ model User {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
+  @@index([departmentId])
+  @@index([isActive])
+  @@index([role])
+  @@index([createdAt])
   @@map("users")
 }
 
@@ -95,6 +99,8 @@ model Department {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
+  @@index([isActive])
+  @@index([createdAt])
   @@map("departments")
 }
 
@@ -116,6 +122,8 @@ model Category {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
+  @@index([parentId])
+  @@index([createdAt])
   @@map("categories")
 }
 
@@ -152,6 +160,11 @@ model Asset {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
+  @@index([status])
+  @@index([categoryId])
+  @@index([securityUserId])
+  @@index([createdAt])
+  @@index([status, createdAt])
   @@map("assets")
 }
 
@@ -206,6 +219,12 @@ model Assignment {
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
 
+  @@index([assetId])
+  @@index([userId])
+  @@index([departmentId])
+  @@index([status])
+  @@index([status, departmentId])
+  @@index([status, userId])
   @@map("assignments")
 }
 
@@ -243,6 +262,11 @@ model MaintenanceLog {
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
 
+  @@index([assetId])
+  @@index([technicianId])
+  @@index([status])
+  @@index([scheduledDate])
+  @@index([status, scheduledDate])
   @@map("maintenance_logs")
 }
 
@@ -284,6 +308,11 @@ model Contract {
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 
+  @@index([status])
+  @@index([endDate])
+  @@index([assetId])
+  @@index([departmentId])
+  @@index([status, endDate])
   @@map("contracts")
 }
 
@@ -326,5 +355,9 @@ model AuditLog {
 
   createdAt   DateTime @default(now())
 
+  @@index([userId])
+  @@index([assetId])
+  @@index([entity, entityId])
+  @@index([createdAt])
   @@map("audit_logs")
 }

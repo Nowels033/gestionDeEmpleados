@@ -45,6 +45,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useFetch } from "@/lib/hooks/use-fetch";
+import { formatCurrency } from "@/lib/utils";
 import toast from "react-hot-toast";
 
 interface MaintenanceLog {
@@ -102,7 +103,7 @@ export default function MantenimientoPage() {
     []
   );
   const { data: assets } = useFetch<AssetOption[]>("/api/activos", []);
-  const { data: users } = useFetch<UserOption[]>("/api/usuarios", []);
+  const { data: users } = useFetch<UserOption[]>("/api/usuarios?view=options", []);
 
   const [dialogOpen, setDialogOpen] = React.useState(false);
   const [submitting, setSubmitting] = React.useState(false);
@@ -128,14 +129,6 @@ export default function MantenimientoPage() {
     technicianId: "",
     notes: "",
   });
-
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat("es-MX", {
-      style: "currency",
-      currency: "MXN",
-      minimumFractionDigits: 0,
-    }).format(value);
-  };
 
   const formatDate = (date: string) => {
     return new Date(date).toLocaleDateString("es-MX", {

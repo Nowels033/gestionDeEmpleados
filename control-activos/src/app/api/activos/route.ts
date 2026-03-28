@@ -19,7 +19,10 @@ const createAssetSchema = z.object({
   securityUserId: z.string().trim().min(1, "El responsable de seguridad es requerido"),
 });
 
+const LIST_CACHE_CONTROL = "private, max-age=20, stale-while-revalidate=120";
+
 export async function GET() {
+  const startedAt = performance.now();
   try {
     const { error } = await requireAuthenticated();
     if (error) {
@@ -27,8 +30,26 @@ export async function GET() {
     }
 
     const assets = await prisma.asset.findMany({
-      include: {
-        category: true,
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        serialNumber: true,
+        brand: true,
+        model: true,
+        purchasePrice: true,
+        currentValue: true,
+        status: true,
+        location: true,
+        qrCode: true,
+        ensLevel: true,
+        category: {
+          select: {
+            id: true,
+            name: true,
+            icon: true,
+          },
+        },
         securityUser: {
           select: {
             id: true,
@@ -36,29 +57,21 @@ export async function GET() {
             lastName: true,
           },
         },
-        assignments: {
-          where: { status: "ACTIVE" },
-          include: {
-            user: {
-              select: {
-                id: true,
-                name: true,
-                lastName: true,
-              },
-            },
-            department: {
-              select: {
-                id: true,
-                name: true,
-              },
-            },
-          },
-        },
       },
       orderBy: { createdAt: "desc" },
     });
 
-    return NextResponse.json(assets);
+    const durationMs = performance.now() - startedAt;
+    if (process.env.NODE_ENV !== "production") {
+      console.info(`[api] GET /api/activos ${durationMs.toFixed(1)}ms rows=${assets.length}`);
+    }
+
+    return NextResponse.json(assets, {
+      headers: {
+        "Cache-Control": LIST_CACHE_CONTROL,
+        "Server-Timing": `total;dur=${durationMs.toFixed(1)}`,
+      },
+    });
   } catch (error) {
     console.error("Error fetching assets:", error);
     return NextResponse.json(

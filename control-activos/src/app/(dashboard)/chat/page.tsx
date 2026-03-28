@@ -63,11 +63,11 @@ export default function ChatPage() {
     setTimeout(() => {
       const responses: Record<string, string> = {
         "¿Cuántos activos tiene Tecnología?":
-          'El departamento de **Tecnología** tiene **48 activos** por un valor total de **$890,000**.\n\n📊 Desglose:\n- 💻 24 Laptops\n- 🖥️ 12 Monitores\n- 🖨️ 8 Periféricos\n- 🖧 4 Servidores\n\n¿Te gustaría ver el reporte completo en PDF?',
+          'El departamento de **Tecnología** tiene **48 activos** por un valor total de **890.000 €**.\n\n📊 Desglose:\n- 💻 24 Laptops\n- 🖥️ 12 Monitores\n- 🖨️ 8 Periféricos\n- 🖧 4 Servidores\n\n¿Te gustaría ver el reporte completo en PDF?',
         "¿Qué laptop tiene Juan Pérez?":
-          'Juan Pérez García tiene asignada una **Laptop Dell XPS 15**.\n\n📋 Detalles:\n- Código: ACT-0042\n- S/N: DLXPS-2024-0042\n- Marca: Dell\n- Modelo: XPS 15 9530\n- Valor: $35,000\n- Asignada: 10/01/2024\n- 🔒 Resp. Seguridad: Carlos Mendoza\n\n¿Quieres ver el detalle completo o exportar la constancia?',
+          'Juan Pérez García tiene asignada una **Laptop Dell XPS 15**.\n\n📋 Detalles:\n- Código: ACT-0042\n- S/N: DLXPS-2024-0042\n- Marca: Dell\n- Modelo: XPS 15 9530\n- Valor: 35.000 €\n- Asignada: 10/01/2024\n- 🔒 Resp. Seguridad: Carlos Mendoza\n\n¿Quieres ver el detalle completo o exportar la constancia?',
         "¿Cuánto vale el inventario total?":
-          'El valor total del inventario es de **$2,450,000**.\n\n📊 Distribución por categoría:\n- 💻 Equipos TI: $1,200,000 (49%)\n- 🚗 Vehículos: $650,000 (27%)\n- 🪑 Mobiliario: $400,000 (16%)\n- 📀 Software: $200,000 (8%)\n\n📈 Variación este trimestre: +7.9% (+$180,000)',
+          'El valor total del inventario es de **2.450.000 €**.\n\n📊 Distribución por categoría:\n- 💻 Equipos TI: 1.200.000 € (49%)\n- 🚗 Vehículos: 650.000 € (27%)\n- 🪑 Mobiliario: 400.000 € (16%)\n- 📀 Software: 200.000 € (8%)\n\n📈 Variación este trimestre: +7.9% (+180.000 €)',
         "¿Qué activos están sin asignar?":
           'Actualmente hay **12 activos** sin asignar:\n\n📦 Lista:\n1. Monitor Samsung 27" (ACT-0123) - Disponible\n2. Laptop HP Pavilion (ACT-0145) - Disponible\n3. Silla Herman Miller (ACT-0167) - Disponible\n4. Impresora HP LaserJet (ACT-0189) - En mantenimiento\n5. ... y 8 más\n\n¿Quieres asignar alguno o ver la lista completa?',
       };

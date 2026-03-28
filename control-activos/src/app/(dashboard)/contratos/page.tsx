@@ -51,6 +51,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useFetch } from "@/lib/hooks/use-fetch";
 import { downloadCsv } from "@/lib/csv";
+import { formatCurrency } from "@/lib/utils";
 import toast from "react-hot-toast";
 
 interface Contract {
@@ -109,7 +110,7 @@ export default function ContratosPage() {
 
   const { data: contracts, loading, refetch } = useFetch<Contract[]>("/api/contratos", []);
   const { data: assets } = useFetch<AssetOption[]>("/api/activos", []);
-  const { data: departments } = useFetch<DepartmentOption[]>("/api/departamentos", []);
+  const { data: departments } = useFetch<DepartmentOption[]>("/api/departamentos?view=options", []);
 
   const [dialogOpen, setDialogOpen] = React.useState(false);
   const [submitting, setSubmitting] = React.useState(false);
@@ -222,14 +223,6 @@ export default function ContratosPage() {
     const matchesType = typeFilter === "all" || contract.type === typeFilter;
     return matchesSearch && matchesStatus && matchesType;
   });
-
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat("es-MX", {
-      style: "currency",
-      currency: "MXN",
-      minimumFractionDigits: 0,
-    }).format(value);
-  };
 
   const formatDate = (date: string) => {
     return new Date(date).toLocaleDateString("es-MX", {

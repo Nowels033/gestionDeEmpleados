@@ -115,8 +115,8 @@ export default function AsignacionesPage() {
     refetch,
   } = useFetch<Assignment[]>("/api/asignaciones", []);
   const { data: assets } = useFetch<AssetOption[]>("/api/activos", []);
-  const { data: users } = useFetch<UserOption[]>("/api/usuarios", []);
-  const { data: departments } = useFetch<DepartmentOption[]>("/api/departamentos", []);
+  const { data: users } = useFetch<UserOption[]>("/api/usuarios?view=options", []);
+  const { data: departments } = useFetch<DepartmentOption[]>("/api/departamentos?view=options", []);
 
   const [searchQuery, setSearchQuery] = React.useState("");
   const [statusFilter, setStatusFilter] = React.useState("all");

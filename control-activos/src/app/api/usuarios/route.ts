@@ -25,16 +25,62 @@ function getErrorMessage(error: unknown): string {
   return "Error interno del servidor";
 }
 
-export async function GET() {
+const LIST_CACHE_CONTROL = "private, max-age=20, stale-while-revalidate=120";
+
+export async function GET(request: Request) {
+  const startedAt = performance.now();
   try {
     const { error } = await requireAuthenticated();
     if (error) {
       return error;
     }
 
+    const { searchParams } = new URL(request.url);
+    const view = searchParams.get("view");
+
+    if (view === "options") {
+      const optionUsers = await prisma.user.findMany({
+        where: { isActive: true },
+        select: {
+          id: true,
+          name: true,
+          lastName: true,
+        },
+        orderBy: [{ name: "asc" }, { lastName: "asc" }],
+      });
+
+      const durationMs = performance.now() - startedAt;
+      if (process.env.NODE_ENV !== "production") {
+        console.info(`[api] GET /api/usuarios?view=options ${durationMs.toFixed(1)}ms rows=${optionUsers.length}`);
+      }
+
+      return NextResponse.json(optionUsers, {
+        headers: {
+          "Cache-Control": LIST_CACHE_CONTROL,
+          "Server-Timing": `total;dur=${durationMs.toFixed(1)}`,
+        },
+      });
+    }
+
     const users = await prisma.user.findMany({
-      include: {
-        department: true,
+      select: {
+        id: true,
+        name: true,
+        lastName: true,
+        email: true,
+        phone: true,
+        photo: true,
+        employeeNumber: true,
+        position: true,
+        hireDate: true,
+        role: true,
+        isActive: true,
+        department: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
         _count: {
           select: {
             assignments: {
@@ -47,14 +93,17 @@ export async function GET() {
       orderBy: { createdAt: "desc" },
     });
 
-    // No enviar contraseñas
-    const usersWithoutPassword = users.map((user) => {
-      const { password: removedPassword, ...safeUser } = user;
-      void removedPassword;
-      return safeUser;
-    });
+    const durationMs = performance.now() - startedAt;
+    if (process.env.NODE_ENV !== "production") {
+      console.info(`[api] GET /api/usuarios ${durationMs.toFixed(1)}ms rows=${users.length}`);
+    }
 
-    return NextResponse.json(usersWithoutPassword);
+    return NextResponse.json(users, {
+      headers: {
+        "Cache-Control": LIST_CACHE_CONTROL,
+        "Server-Timing": `total;dur=${durationMs.toFixed(1)}`,
+      },
+    });
   } catch (error) {
     console.error("Error fetching users:", error);
     return NextResponse.json(

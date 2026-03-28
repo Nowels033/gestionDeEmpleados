@@ -2,8 +2,9 @@
 
 import * as React from "react";
 
-const CLIENT_CACHE_TTL_MS = 15_000;
+const CLIENT_CACHE_TTL_MS = 60_000;
 const clientCache = new Map<string, { data: unknown; timestamp: number }>();
+const inflightRequests = new Map<string, Promise<unknown>>();
 
 interface UseFetchResult<T> {
   data: T;
@@ -14,11 +15,14 @@ interface UseFetchResult<T> {
 
 export function useFetch<T>(url: string, defaultValue: T): UseFetchResult<T> {
   const defaultValueRef = React.useRef(defaultValue);
-  const [data, setData] = React.useState<T>(defaultValue);
-  const [loading, setLoading] = React.useState(true);
+  const cachedAtInit = clientCache.get(url);
+  const [data, setData] = React.useState<T>(
+    (cachedAtInit?.data as T | undefined) ?? defaultValue
+  );
+  const [loading, setLoading] = React.useState(!cachedAtInit);
   const [error, setError] = React.useState<string | null>(null);
 
-  const fetchData = React.useCallback(async (force = false) => {
+  const fetchData = React.useCallback(async (force = false, silent = false) => {
     const cached = clientCache.get(url);
     const cacheIsFresh =
       cached && Date.now() - cached.timestamp < CLIENT_CACHE_TTL_MS;
@@ -30,17 +34,33 @@ export function useFetch<T>(url: string, defaultValue: T): UseFetchResult<T> {
       return;
     }
 
+    if (!force && cached && !cacheIsFresh) {
+      setData(cached.data as T);
+      setLoading(false);
+      setError(null);
+    }
+
     try {
-      setLoading(true);
+      if (!silent && !cached) {
+        setLoading(true);
+      }
       setError(null);
 
-      const response = await fetch(url);
-
-      if (!response.ok) {
-        throw new Error(`Error ${response.status}`);
+      let request = inflightRequests.get(url);
+      if (!request || force) {
+        request = fetch(url).then(async (response) => {
+          if (!response.ok) {
+            throw new Error(`Error ${response.status}`);
+          }
+          return response.json();
+        });
+        inflightRequests.set(url, request);
       }
 
-      const result = await response.json();
+      const result = await request;
+      if (inflightRequests.get(url) === request) {
+        inflightRequests.delete(url);
+      }
 
       const safeDefaultValue = defaultValueRef.current;
 
@@ -55,17 +75,20 @@ export function useFetch<T>(url: string, defaultValue: T): UseFetchResult<T> {
         clientCache.set(url, { data: safeResult, timestamp: Date.now() });
       }
     } catch (err) {
+      inflightRequests.delete(url);
       console.error(`Error fetching ${url}:`, err);
       setError("Error al cargar datos");
-      setData(defaultValueRef.current);
+      const staleCache = clientCache.get(url);
+      setData((staleCache?.data as T | undefined) ?? defaultValueRef.current);
     } finally {
       setLoading(false);
     }
   }, [url]);
 
   React.useEffect(() => {
-    fetchData(false);
-  }, [fetchData]);
+    const hasCache = clientCache.has(url);
+    fetchData(false, hasCache);
+  }, [fetchData, url]);
 
   return { data, loading, error, refetch: () => fetchData(true) };
 }

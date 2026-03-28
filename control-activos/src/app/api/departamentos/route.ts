@@ -9,11 +9,32 @@ const createDepartmentSchema = z.object({
   location: z.string().trim().optional(),
 });
 
-export async function GET() {
+const LIST_CACHE_CONTROL = "private, max-age=20, stale-while-revalidate=120";
+
+export async function GET(request: Request) {
   try {
     const { error } = await requireAuthenticated();
     if (error) {
       return error;
+    }
+
+    const { searchParams } = new URL(request.url);
+    const view = searchParams.get("view");
+
+    if (view === "options") {
+      const departments = await prisma.department.findMany({
+        select: {
+          id: true,
+          name: true,
+        },
+        orderBy: { name: "asc" },
+      });
+
+      return NextResponse.json(departments, {
+        headers: {
+          "Cache-Control": LIST_CACHE_CONTROL,
+        },
+      });
     }
 
     const [departments, activeAssignments] = await Promise.all([
@@ -65,7 +86,11 @@ export async function GET() {
       assetValue: statsByDepartmentId[department.id]?.assetValue || 0,
     }));
 
-    return NextResponse.json(departmentsWithValue);
+    return NextResponse.json(departmentsWithValue, {
+      headers: {
+        "Cache-Control": LIST_CACHE_CONTROL,
+      },
+    });
   } catch (error) {
     console.error("Error fetching departments:", error);
     return NextResponse.json(

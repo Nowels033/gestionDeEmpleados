@@ -20,6 +20,7 @@ import { Badge } from "@/components/ui/badge";
 import { Loading } from "@/components/ui/loading";
 import { DashboardPageHeader } from "@/components/layout/dashboard-page-header";
 import { useFetch } from "@/lib/hooks/use-fetch";
+import { formatCurrency } from "@/lib/utils";
 import toast from "react-hot-toast";
 
 interface Report {
@@ -172,13 +173,6 @@ export default function ReportesPage() {
   const filteredReports = selectedCategory
     ? reports.filter((r) => r.category === selectedCategory)
     : reports;
-
-  const formatCurrency = (value: number) =>
-    new Intl.NumberFormat("es-MX", {
-      style: "currency",
-      currency: "MXN",
-      minimumFractionDigits: 0,
-    }).format(value);
 
   if (loading) {
     return <Loading text="Cargando reportes..." />;

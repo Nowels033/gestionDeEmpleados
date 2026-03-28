@@ -10,11 +10,33 @@ const createCategorySchema = z.object({
   parentId: z.string().trim().optional(),
 });
 
-export async function GET() {
+const LIST_CACHE_CONTROL = "private, max-age=20, stale-while-revalidate=120";
+
+export async function GET(request: Request) {
   try {
     const { error } = await requireAuthenticated();
     if (error) {
       return error;
+    }
+
+    const { searchParams } = new URL(request.url);
+    const view = searchParams.get("view");
+
+    if (view === "options") {
+      const categories = await prisma.category.findMany({
+        select: {
+          id: true,
+          name: true,
+          icon: true,
+        },
+        orderBy: { name: "asc" },
+      });
+
+      return NextResponse.json(categories, {
+        headers: {
+          "Cache-Control": LIST_CACHE_CONTROL,
+        },
+      });
     }
 
     const categories = await prisma.category.findMany({
@@ -28,7 +50,11 @@ export async function GET() {
       orderBy: { name: "asc" },
     });
 
-    return NextResponse.json(categories);
+    return NextResponse.json(categories, {
+      headers: {
+        "Cache-Control": LIST_CACHE_CONTROL,
+      },
+    });
   } catch (error) {
     console.error("Error fetching categories:", error);
     return NextResponse.json(

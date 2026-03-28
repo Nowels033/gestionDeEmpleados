@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { LoadingSkeleton } from "@/components/ui/loading";
 import { DashboardPageHeader } from "@/components/layout/dashboard-page-header";
 import { useFetch } from "@/lib/hooks/use-fetch";
+import { formatCurrency } from "@/lib/utils";
 import {
   BarChart,
   Bar,
@@ -108,14 +109,6 @@ export default function DashboardPage() {
     "/api/dashboard",
     defaultData
   );
-
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat("es-MX", {
-      style: "currency",
-      currency: "MXN",
-      minimumFractionDigits: 0,
-    }).format(value);
-  };
 
   if (loading) {
     return <LoadingSkeleton />;

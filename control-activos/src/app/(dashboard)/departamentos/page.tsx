@@ -31,6 +31,7 @@ import { Loading } from "@/components/ui/loading";
 import { EmptyState } from "@/components/ui/empty-state";
 import { DashboardPageHeader } from "@/components/layout/dashboard-page-header";
 import { useFetch } from "@/lib/hooks/use-fetch";
+import { formatCurrency } from "@/lib/utils";
 import toast from "react-hot-toast";
 import {
   Select,
@@ -60,14 +61,6 @@ interface Department {
   assetCount: number;
   assetValue: number;
 }
-
-const formatCurrency = (value: number) => {
-  return new Intl.NumberFormat("es-MX", {
-    style: "currency",
-    currency: "MXN",
-    minimumFractionDigits: 0,
-  }).format(value);
-};
 
 export default function DepartamentosPage() {
   const {

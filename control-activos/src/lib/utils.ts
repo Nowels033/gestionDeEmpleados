@@ -5,10 +5,17 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export function formatCurrency(value: number): string {
-  return new Intl.NumberFormat("es-MX", {
+export function formatCurrency(
+  value: number,
+  options?: { fractionDigits?: number }
+): string {
+  const fractionDigits = options?.fractionDigits ?? 0;
+
+  return new Intl.NumberFormat("es-ES", {
     style: "currency",
-    currency: "MXN",
+    currency: "EUR",
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: fractionDigits,
   }).format(value);
 }
 

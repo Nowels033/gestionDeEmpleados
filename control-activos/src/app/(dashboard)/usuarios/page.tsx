@@ -17,6 +17,8 @@ import {
   Eye,
   UserCheck,
   UserX,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -95,7 +97,7 @@ export default function UsuariosPage() {
   const FILTERS_STORAGE_KEY = "usuarios.filters.v1";
 
   const { data: users, loading, refetch } = useFetch<User[]>("/api/usuarios", []);
-  const { data: departments } = useFetch<Department[]>("/api/departamentos", []);
+  const { data: departments } = useFetch<Department[]>("/api/departamentos?view=options", []);
 
   const [searchQuery, setSearchQuery] = React.useState("");
   const [dialogOpen, setDialogOpen] = React.useState(false);
@@ -109,6 +111,8 @@ export default function UsuariosPage() {
   const [bulkLoading, setBulkLoading] = React.useState(false);
   const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = React.useState(false);
   const [filtersHydrated, setFiltersHydrated] = React.useState(false);
+  const [currentPage, setCurrentPage] = React.useState(1);
+  const ITEMS_PER_PAGE = 18;
   const [editFormData, setEditFormData] = React.useState({
     name: "",
     lastName: "",
@@ -135,17 +139,28 @@ export default function UsuariosPage() {
     password: "",
   });
 
-  const filteredUsers = users.filter(
-    (user) =>
-      user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      user.lastName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      user.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      user.employeeNumber.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredUsers = React.useMemo(() => {
+    const normalizedQuery = searchQuery.trim().toLowerCase();
+
+    return users.filter(
+      (user) =>
+        user.name.toLowerCase().includes(normalizedQuery) ||
+        user.lastName.toLowerCase().includes(normalizedQuery) ||
+        user.email.toLowerCase().includes(normalizedQuery) ||
+        user.employeeNumber.toLowerCase().includes(normalizedQuery)
+    );
+  }, [users, searchQuery]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredUsers.length / ITEMS_PER_PAGE));
+
+  const paginatedUsers = React.useMemo(() => {
+    const start = (currentPage - 1) * ITEMS_PER_PAGE;
+    return filteredUsers.slice(start, start + ITEMS_PER_PAGE);
+  }, [filteredUsers, currentPage]);
 
   const allFilteredSelected =
-    filteredUsers.length > 0 &&
-    filteredUsers.every((user) => selectedUserIds.includes(user.id));
+    paginatedUsers.length > 0 &&
+    paginatedUsers.every((user) => selectedUserIds.includes(user.id));
 
   const getInitials = (name: string, lastName: string) => {
     return `${name.charAt(0)}${lastName.charAt(0)}`.toUpperCase();
@@ -196,6 +211,16 @@ export default function UsuariosPage() {
       JSON.stringify({ searchQuery })
     );
   }, [filtersHydrated, searchQuery]);
+
+  React.useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery]);
+
+  React.useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
 
   const handleCreateUser = async () => {
     if (
@@ -348,7 +373,7 @@ export default function UsuariosPage() {
   };
 
   const toggleAllFilteredUsers = () => {
-    const visibleIds = filteredUsers.map((user) => user.id);
+    const visibleIds = paginatedUsers.map((user) => user.id);
     if (allFilteredSelected) {
       setSelectedUserIds((prev) => prev.filter((id) => !visibleIds.includes(id)));
       return;
@@ -732,7 +757,7 @@ export default function UsuariosPage() {
         />
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {filteredUsers.map((user, index) => (
+          {paginatedUsers.map((user, index) => (
             <motion.div
               key={user.id}
               initial={{ opacity: 0, y: 20 }}
@@ -840,6 +865,32 @@ export default function UsuariosPage() {
           ))}
         </div>
       )}
+
+      {filteredUsers.length > ITEMS_PER_PAGE ? (
+        <div className="flex items-center justify-end gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+            disabled={currentPage === 1}
+          >
+            <ChevronLeft className="mr-1 h-4 w-4" />
+            Anterior
+          </Button>
+          <span className="text-sm text-muted-foreground">
+            Pagina {currentPage} de {totalPages}
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+            disabled={currentPage === totalPages}
+          >
+            Siguiente
+            <ChevronRight className="ml-1 h-4 w-4" />
+          </Button>
+        </div>
+      ) : null}
 
       <Dialog open={detailDialogOpen} onOpenChange={setDetailDialogOpen}>
         <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
