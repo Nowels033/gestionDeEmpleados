@@ -16,6 +16,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Loading } from "@/components/ui/loading";
+import { useFetch } from "@/lib/hooks/use-fetch";
+import toast from "react-hot-toast";
 import {
   Dialog,
   DialogContent,
@@ -45,108 +48,95 @@ import {
 interface Category {
   id: string;
   name: string;
-  description: string;
-  icon: string;
-  assetCount: number;
+  description: string | null;
+  icon: string | null;
+  parentId: string | null;
+  _count: {
+    assets: number;
+  };
   children?: Category[];
 }
 
-const categories: Category[] = [
-  {
-    id: "1",
-    name: "Equipos de Cómputo",
-    description: "Laptops, desktops y servidores",
-    icon: "💻",
-    assetCount: 48,
-    children: [
-      {
-        id: "1-1",
-        name: "Laptops",
-        description: "Portátiles de trabajo",
-        icon: "💻",
-        assetCount: 24,
-      },
-      {
-        id: "1-2",
-        name: "Desktops",
-        description: "Computadoras de escritorio",
-        icon: "🖥️",
-        assetCount: 12,
-      },
-      {
-        id: "1-3",
-        name: "Servidores",
-        description: "Servidores de infraestructura",
-        icon: "🖧",
-        assetCount: 4,
-      },
-    ],
-  },
-  {
-    id: "2",
-    name: "Monitores y Pantallas",
-    description: "Monitores, proyectores y pantallas",
-    icon: "🖥️",
-    assetCount: 32,
-    children: [
-      {
-        id: "2-1",
-        name: "Monitores",
-        description: "Monitores de escritorio",
-        icon: "🖥️",
-        assetCount: 24,
-      },
-      {
-        id: "2-2",
-        name: "Proyectores",
-        description: "Proyectores de presentación",
-        icon: "📽️",
-        assetCount: 8,
-      },
-    ],
-  },
-  {
-    id: "3",
-    name: "Vehículos",
-    description: "Autos, camionetas y motos",
-    icon: "🚗",
-    assetCount: 16,
-  },
-  {
-    id: "4",
-    name: "Mobiliario",
-    description: "Escritorios, sillas y archiveros",
-    icon: "🪑",
-    assetCount: 85,
-  },
-  {
-    id: "5",
-    name: "Periféricos",
-    description: "Impresoras, scanners y cámaras",
-    icon: "🖨️",
-    assetCount: 28,
-  },
-  {
-    id: "6",
-    name: "Software y Licencias",
-    description: "Licencias de software",
-    icon: "📀",
-    assetCount: 42,
-  },
-];
-
 export default function CategoriasPage() {
-  const [expandedCategories, setExpandedCategories] = React.useState<string[]>([
-    "1",
-    "2",
-  ]);
+  const {
+    data: categories,
+    loading,
+    refetch,
+  } = useFetch<Category[]>("/api/categorias", []);
+
+  const [expandedCategories, setExpandedCategories] = React.useState<string[]>([]);
   const [dialogOpen, setDialogOpen] = React.useState(false);
+  const [submitting, setSubmitting] = React.useState(false);
+  const [formData, setFormData] = React.useState({
+    name: "",
+    description: "",
+    icon: "",
+    parentId: "none",
+  });
+
+  const categoryAssetCount = React.useMemo(() => {
+    return categories.reduce<Record<string, number>>((acc, category) => {
+      acc[category.id] = category._count.assets;
+      return acc;
+    }, {});
+  }, [categories]);
+
+  const rootCategories = React.useMemo(
+    () => categories.filter((category) => category.parentId === null),
+    [categories]
+  );
+
+  React.useEffect(() => {
+    if (rootCategories.length > 0 && expandedCategories.length === 0) {
+      setExpandedCategories(rootCategories.slice(0, 2).map((category) => category.id));
+    }
+  }, [rootCategories, expandedCategories.length]);
+
+  const handleCreateCategory = async () => {
+    if (!formData.name.trim()) {
+      toast.error("El nombre de la categoria es requerido");
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const response = await fetch("/api/categorias", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: formData.name,
+          description: formData.description || undefined,
+          icon: formData.icon || undefined,
+          parentId: formData.parentId === "none" ? undefined : formData.parentId,
+        }),
+      });
+
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        toast.error(body?.error ?? "No fue posible crear la categoria");
+        return;
+      }
+
+      toast.success("Categoria creada correctamente");
+      setDialogOpen(false);
+      setFormData({ name: "", description: "", icon: "", parentId: "none" });
+      refetch();
+    } catch {
+      toast.error("No fue posible crear la categoria");
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   const toggleCategory = (id: string) => {
     setExpandedCategories((prev) =>
       prev.includes(id) ? prev.filter((c) => c !== id) : [...prev, id]
     );
   };
+
+  if (loading) {
+    return <Loading text="Cargando categorias..." />;
+  }
 
   return (
     <motion.div
@@ -179,51 +169,71 @@ export default function CategoriasPage() {
             <div className="grid gap-4 py-4">
               <div className="space-y-2">
                 <Label htmlFor="name">Nombre *</Label>
-                <Input id="name" placeholder="Ej: Equipos de Cómputo" />
+                <Input
+                  id="name"
+                  placeholder="Ej: Equipos de Computo"
+                  value={formData.name}
+                  onChange={(event) =>
+                    setFormData((prev) => ({ ...prev, name: event.target.value }))
+                  }
+                />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="description">Descripción</Label>
                 <Textarea
                   id="description"
-                  placeholder="Descripción de la categoría..."
+                  placeholder="Descripcion de la categoria..."
                   rows={2}
+                  value={formData.description}
+                  onChange={(event) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      description: event.target.value,
+                    }))
+                  }
                 />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="icon">Icono (emoji)</Label>
-                <Input id="icon" placeholder="Ej: 💻" className="w-20" />
+                <Input
+                  id="icon"
+                  placeholder="Ej: 💻"
+                  className="w-20"
+                  value={formData.icon}
+                  onChange={(event) =>
+                    setFormData((prev) => ({ ...prev, icon: event.target.value }))
+                  }
+                />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="parent">Categoría padre (opcional)</Label>
-                <Select>
+                <Select
+                  value={formData.parentId}
+                  onValueChange={(value) =>
+                    setFormData((prev) => ({ ...prev, parentId: value }))
+                  }
+                >
                   <SelectTrigger>
                     <SelectValue placeholder="Ninguna (categoría principal)" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">Ninguna</SelectItem>
-                    {categories.map((cat) => (
+                    {rootCategories.map((cat) => (
                       <SelectItem key={cat.id} value={cat.id}>
-                        {cat.icon} {cat.name}
+                        {cat.icon || "📁"} {cat.name}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Foto predeterminada</Label>
-                <div className="flex items-center justify-center w-full h-24 border-2 border-dashed rounded-lg cursor-pointer hover:bg-muted/50 transition-colors">
-                  <div className="flex flex-col items-center gap-1 text-muted-foreground">
-                    <Package className="h-6 w-6" />
-                    <span className="text-xs">Subir foto</span>
-                  </div>
-                </div>
               </div>
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setDialogOpen(false)}>
                 Cancelar
               </Button>
-              <Button onClick={() => setDialogOpen(false)}>Guardar</Button>
+              <Button onClick={handleCreateCategory} disabled={submitting}>
+                {submitting ? "Guardando..." : "Guardar"}
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -239,7 +249,7 @@ export default function CategoriasPage() {
         </CardHeader>
         <CardContent>
           <div className="space-y-2">
-            {categories.map((category) => (
+            {rootCategories.map((category) => (
               <motion.div
                 key={category.id}
                 initial={{ opacity: 0, x: -20 }}
@@ -248,10 +258,12 @@ export default function CategoriasPage() {
                 <div
                   className="flex items-center gap-3 p-3 rounded-lg hover:bg-muted/50 transition-colors cursor-pointer group"
                   onClick={() =>
-                    category.children && toggleCategory(category.id)
+                    category.children &&
+                    category.children.length > 0 &&
+                    toggleCategory(category.id)
                   }
                 >
-                  {category.children && (
+                  {category.children && category.children.length > 0 && (
                     <Button variant="ghost" size="icon" className="h-6 w-6 p-0">
                       {expandedCategories.includes(category.id) ? (
                         <ChevronDown className="h-4 w-4" />
@@ -260,19 +272,21 @@ export default function CategoriasPage() {
                       )}
                     </Button>
                   )}
-                  {!category.children && <div className="w-6" />}
+                  {(!category.children || category.children.length === 0) && (
+                    <div className="w-6" />
+                  )}
 
-                  <span className="text-2xl">{category.icon}</span>
+                  <span className="text-2xl">{category.icon || "📁"}</span>
 
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <span className="font-medium">{category.name}</span>
                       <Badge variant="secondary" className="text-xs">
-                        {category.assetCount} activos
+                        {category._count.assets} activos
                       </Badge>
                     </div>
                     <p className="text-sm text-muted-foreground truncate">
-                      {category.description}
+                      {category.description || "Sin descripcion"}
                     </p>
                   </div>
 
@@ -307,6 +321,7 @@ export default function CategoriasPage() {
 
                 {/* Children */}
                 {category.children &&
+                  category.children.length > 0 &&
                   expandedCategories.includes(category.id) && (
                     <motion.div
                       initial={{ opacity: 0, height: 0 }}
@@ -319,18 +334,18 @@ export default function CategoriasPage() {
                           key={child.id}
                           className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50 transition-colors group"
                         >
-                          <span className="text-xl">{child.icon}</span>
+                          <span className="text-xl">{child.icon || "📁"}</span>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2">
                               <span className="font-medium text-sm">
                                 {child.name}
                               </span>
                               <Badge variant="outline" className="text-xs">
-                                {child.assetCount}
+                                {categoryAssetCount[child.id] || 0}
                               </Badge>
                             </div>
                             <p className="text-xs text-muted-foreground truncate">
-                              {child.description}
+                              {child.description || "Sin descripcion"}
                             </p>
                           </div>
                           <Button
@@ -359,7 +374,7 @@ export default function CategoriasPage() {
                 <FolderTree className="h-6 w-6 text-primary" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{categories.length}</p>
+                <p className="text-2xl font-bold">{rootCategories.length}</p>
                 <p className="text-sm text-muted-foreground">
                   Categorías principales
                 </p>
@@ -393,7 +408,7 @@ export default function CategoriasPage() {
               </div>
               <div>
                 <p className="text-2xl font-bold">
-                  {categories.reduce((acc, cat) => acc + cat.assetCount, 0)}
+                  {rootCategories.reduce((acc, cat) => acc + cat._count.assets, 0)}
                 </p>
                 <p className="text-sm text-muted-foreground">
                   Total de activos categorizados

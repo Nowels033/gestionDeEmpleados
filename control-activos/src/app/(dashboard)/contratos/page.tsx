@@ -3,9 +3,7 @@
 import * as React from "react";
 import { motion } from "framer-motion";
 import {
-  FileText,
   Plus,
-  Search,
   Calendar,
   DollarSign,
   Building2,
@@ -21,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Loading } from "@/components/ui/loading";
 import {
   Dialog,
   DialogContent,
@@ -46,6 +45,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useFetch } from "@/lib/hooks/use-fetch";
+import toast from "react-hot-toast";
 
 interface Contract {
   id: string;
@@ -54,105 +55,44 @@ interface Contract {
   provider: string;
   startDate: string;
   endDate: string;
-  value: number;
+  value: number | null;
   status: "ACTIVE" | "EXPIRED" | "CANCELLED" | "RENEWED";
-  assetName?: string;
-  assetId?: string;
-  department?: string;
-  notes?: string;
-  daysUntilExpiry: number;
+  notes: string | null;
+  asset: {
+    id: string;
+    name: string;
+    qrCode: string | null;
+  } | null;
+  department: {
+    id: string;
+    name: string;
+  } | null;
 }
 
-const contracts: Contract[] = [
-  {
-    id: "1",
-    name: "Soporte técnico Dell",
-    type: "SERVICE",
-    provider: "Dell Technologies",
-    startDate: "2024-01-01",
-    endDate: "2025-01-01",
-    value: 25000,
-    status: "ACTIVE",
-    assetName: "Laptop Dell XPS 15",
-    assetId: "ACT-0042",
-    daysUntilExpiry: 280,
-  },
-  {
-    id: "2",
-    name: "Garantía extendida Apple",
-    type: "WARRANTY",
-    provider: "Apple",
-    startDate: "2024-03-15",
-    endDate: "2026-03-15",
-    value: 8500,
-    status: "ACTIVE",
-    assetName: 'MacBook Pro 14"',
-    assetId: "ACT-0089",
-    daysUntilExpiry: 718,
-  },
-  {
-    id: "3",
-    name: "Seguro de vehículos",
-    type: "INSURANCE",
-    provider: "AXA Seguros",
-    startDate: "2024-01-01",
-    endDate: "2024-12-31",
-    value: 45000,
-    status: "ACTIVE",
-    department: "Ventas",
-    daysUntilExpiry: 279,
-  },
-  {
-    id: "4",
-    name: "Licencia Microsoft 365",
-    type: "LICENSE",
-    provider: "Microsoft",
-    startDate: "2024-01-01",
-    endDate: "2024-12-31",
-    value: 120000,
-    status: "ACTIVE",
-    department: "Tecnología",
-    notes: "50 licencias Business Standard",
-    daysUntilExpiry: 279,
-  },
-  {
-    id: "5",
-    name: "Mantenimiento servidores",
-    type: "MAINTENANCE",
-    provider: "IBM México",
-    startDate: "2023-06-01",
-    endDate: "2024-05-31",
-    value: 35000,
-    status: "ACTIVE",
-    assetName: "Servidor Dell PowerEdge",
-    assetId: "ACT-0201",
-    daysUntilExpiry: 65,
-  },
-  {
-    id: "6",
-    name: "Arrendamiento impresoras",
-    type: "LEASE",
-    provider: "Xerox México",
-    startDate: "2023-01-01",
-    endDate: "2024-03-01",
-    value: 18000,
-    status: "EXPIRED",
-    department: "Administración",
-    notes: "3 impresoras multifuncionales",
-    daysUntilExpiry: -26,
-  },
-];
+interface AssetOption {
+  id: string;
+  name: string;
+  qrCode: string | null;
+}
+
+interface DepartmentOption {
+  id: string;
+  name: string;
+}
 
 const typeLabels: Record<string, { label: string; icon: string }> = {
   SERVICE: { label: "Servicio", icon: "🔧" },
-  WARRANTY: { label: "Garantía", icon: "🛡️" },
+  WARRANTY: { label: "Garantia", icon: "🛡️" },
   INSURANCE: { label: "Seguro", icon: "📋" },
   LEASE: { label: "Arrendamiento", icon: "📄" },
   LICENSE: { label: "Licencia", icon: "📀" },
   MAINTENANCE: { label: "Mantenimiento", icon: "🔧" },
 };
 
-const statusColors: Record<string, { label: string; variant: "success" | "destructive" | "secondary" | "warning" }> = {
+const statusColors: Record<
+  string,
+  { label: string; variant: "success" | "destructive" | "secondary" | "warning" }
+> = {
   ACTIVE: { label: "Activo", variant: "success" },
   EXPIRED: { label: "Vencido", variant: "destructive" },
   CANCELLED: { label: "Cancelado", variant: "secondary" },
@@ -160,7 +100,39 @@ const statusColors: Record<string, { label: string; variant: "success" | "destru
 };
 
 export default function ContratosPage() {
+  const { data: contracts, loading, refetch } = useFetch<Contract[]>("/api/contratos", []);
+  const { data: assets } = useFetch<AssetOption[]>("/api/activos", []);
+  const { data: departments } = useFetch<DepartmentOption[]>("/api/departamentos", []);
+
   const [dialogOpen, setDialogOpen] = React.useState(false);
+  const [submitting, setSubmitting] = React.useState(false);
+  const [formData, setFormData] = React.useState({
+    name: "",
+    type: "SERVICE" as
+      | "SERVICE"
+      | "WARRANTY"
+      | "INSURANCE"
+      | "LEASE"
+      | "LICENSE"
+      | "MAINTENANCE",
+    provider: "",
+    startDate: "",
+    endDate: "",
+    value: "",
+    notes: "",
+    assetId: "",
+    departmentId: "",
+  });
+
+  const contractsWithExpiry = React.useMemo(() => {
+    return contracts.map((contract) => {
+      const today = new Date();
+      const endDate = new Date(contract.endDate);
+      const diffTime = endDate.getTime() - today.getTime();
+      const daysUntilExpiry = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      return { ...contract, daysUntilExpiry };
+    });
+  }, [contracts]);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("es-MX", {
@@ -178,18 +150,72 @@ export default function ContratosPage() {
     });
   };
 
+  const handleCreateContract = async () => {
+    if (!formData.name || !formData.provider || !formData.startDate || !formData.endDate) {
+      toast.error("Completa los campos requeridos");
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const response = await fetch("/api/contratos", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: formData.name,
+          type: formData.type,
+          provider: formData.provider,
+          startDate: formData.startDate,
+          endDate: formData.endDate,
+          value: formData.value ? Number(formData.value) : undefined,
+          notes: formData.notes || undefined,
+          assetId: formData.assetId || undefined,
+          departmentId: formData.departmentId || undefined,
+        }),
+      });
+
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        toast.error(body?.error ?? "No fue posible crear el contrato");
+        return;
+      }
+
+      toast.success("Contrato creado correctamente");
+      setDialogOpen(false);
+      setFormData({
+        name: "",
+        type: "SERVICE",
+        provider: "",
+        startDate: "",
+        endDate: "",
+        value: "",
+        notes: "",
+        assetId: "",
+        departmentId: "",
+      });
+      refetch();
+    } catch {
+      toast.error("No fue posible crear el contrato");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (loading) {
+    return <Loading text="Cargando contratos..." />;
+  }
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       className="space-y-6"
     >
-      {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Contratos y Licencias</h1>
           <p className="text-muted-foreground">
-            Gestiona contratos de servicio, garantías, seguros y licencias
+            Gestiona contratos de servicio, garantias, seguros y licencias
           </p>
         </div>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
@@ -202,25 +228,40 @@ export default function ContratosPage() {
           <DialogContent className="sm:max-w-[500px]">
             <DialogHeader>
               <DialogTitle>Nuevo Contrato</DialogTitle>
-              <DialogDescription>
-                Registra un nuevo contrato o licencia
-              </DialogDescription>
+              <DialogDescription>Registra un nuevo contrato o licencia</DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
               <div className="space-y-2">
                 <Label>Nombre *</Label>
-                <Input placeholder="Ej: Soporte técnico Dell" />
+                <Input
+                  placeholder="Ej: Soporte tecnico Dell"
+                  value={formData.name}
+                  onChange={(event) =>
+                    setFormData((prev) => ({ ...prev, name: event.target.value }))
+                  }
+                />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Tipo *</Label>
-                  <Select>
+                  <Select
+                    value={formData.type}
+                    onValueChange={(
+                      value:
+                        | "SERVICE"
+                        | "WARRANTY"
+                        | "INSURANCE"
+                        | "LEASE"
+                        | "LICENSE"
+                        | "MAINTENANCE"
+                    ) => setFormData((prev) => ({ ...prev, type: value }))}
+                  >
                     <SelectTrigger>
                       <SelectValue placeholder="Seleccionar" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="SERVICE">Servicio</SelectItem>
-                      <SelectItem value="WARRANTY">Garantía</SelectItem>
+                      <SelectItem value="WARRANTY">Garantia</SelectItem>
                       <SelectItem value="INSURANCE">Seguro</SelectItem>
                       <SelectItem value="LEASE">Arrendamiento</SelectItem>
                       <SelectItem value="LICENSE">Licencia</SelectItem>
@@ -230,41 +271,121 @@ export default function ContratosPage() {
                 </div>
                 <div className="space-y-2">
                   <Label>Proveedor *</Label>
-                  <Input placeholder="Nombre del proveedor" />
+                  <Input
+                    placeholder="Nombre del proveedor"
+                    value={formData.provider}
+                    onChange={(event) =>
+                      setFormData((prev) => ({ ...prev, provider: event.target.value }))
+                    }
+                  />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Fecha inicio *</Label>
-                  <Input type="date" />
+                  <Input
+                    type="date"
+                    value={formData.startDate}
+                    onChange={(event) =>
+                      setFormData((prev) => ({ ...prev, startDate: event.target.value }))
+                    }
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label>Fecha fin *</Label>
-                  <Input type="date" />
+                  <Input
+                    type="date"
+                    value={formData.endDate}
+                    onChange={(event) =>
+                      setFormData((prev) => ({ ...prev, endDate: event.target.value }))
+                    }
+                  />
                 </div>
               </div>
               <div className="space-y-2">
                 <Label>Valor</Label>
-                <Input type="number" placeholder="0" />
+                <Input
+                  type="number"
+                  placeholder="0"
+                  value={formData.value}
+                  onChange={(event) =>
+                    setFormData((prev) => ({ ...prev, value: event.target.value }))
+                  }
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Activo (opcional)</Label>
+                  <Select
+                    value={formData.assetId || "none"}
+                    onValueChange={(value) =>
+                      setFormData((prev) => ({ ...prev, assetId: value === "none" ? "" : value }))
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Sin activo" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Sin activo</SelectItem>
+                      {assets.map((asset) => (
+                        <SelectItem key={asset.id} value={asset.id}>
+                          {asset.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Departamento (opcional)</Label>
+                  <Select
+                    value={formData.departmentId || "none"}
+                    onValueChange={(value) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        departmentId: value === "none" ? "" : value,
+                      }))
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Sin departamento" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Sin departamento</SelectItem>
+                      {departments.map((department) => (
+                        <SelectItem key={department.id} value={department.id}>
+                          {department.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
               <div className="space-y-2">
                 <Label>Notas</Label>
-                <Textarea placeholder="Notas adicionales..." rows={2} />
+                <Textarea
+                  placeholder="Notas adicionales..."
+                  rows={2}
+                  value={formData.notes}
+                  onChange={(event) =>
+                    setFormData((prev) => ({ ...prev, notes: event.target.value }))
+                  }
+                />
               </div>
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setDialogOpen(false)}>
                 Cancelar
               </Button>
-              <Button onClick={() => setDialogOpen(false)}>Guardar</Button>
+              <Button onClick={handleCreateContract} disabled={submitting}>
+                {submitting ? "Guardando..." : "Guardar"}
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
       </div>
 
-      {/* Contracts List */}
       <div className="space-y-3">
-        {contracts.map((contract, index) => (
+        {contractsWithExpiry.map((contract, index) => (
           <motion.div
             key={contract.id}
             initial={{ opacity: 0, y: 10 }}
@@ -282,21 +403,20 @@ export default function ContratosPage() {
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex items-start gap-4 flex-1">
                     <div className="p-3 rounded-xl bg-primary/10 text-2xl">
-                      {typeLabels[contract.type]?.icon}
+                      {typeLabels[contract.type].icon}
                     </div>
                     <div className="flex-1">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-semibold">{contract.name}</span>
-                        <Badge variant={statusColors[contract.status]?.variant}>
-                          {statusColors[contract.status]?.label}
+                        <Badge variant={statusColors[contract.status].variant}>
+                          {statusColors[contract.status].label}
                         </Badge>
-                        {contract.daysUntilExpiry <= 30 &&
-                          contract.status === "ACTIVE" && (
-                            <Badge variant="warning">
-                              <AlertTriangle className="h-3 w-3 mr-1" />
-                              Vence en {contract.daysUntilExpiry} días
-                            </Badge>
-                          )}
+                        {contract.daysUntilExpiry <= 30 && contract.status === "ACTIVE" && (
+                          <Badge variant="warning">
+                            <AlertTriangle className="h-3 w-3 mr-1" />
+                            Vence en {contract.daysUntilExpiry} dias
+                          </Badge>
+                        )}
                       </div>
                       <div className="flex items-center gap-4 mt-1 text-sm text-muted-foreground flex-wrap">
                         <span className="flex items-center gap-1">
@@ -305,29 +425,24 @@ export default function ContratosPage() {
                         </span>
                         <span className="flex items-center gap-1">
                           <Calendar className="h-3 w-3" />
-                          {formatDate(contract.startDate)} -{" "}
-                          {formatDate(contract.endDate)}
+                          {formatDate(contract.startDate)} - {formatDate(contract.endDate)}
                         </span>
-                        <span className="flex items-center gap-1">
-                          <DollarSign className="h-3 w-3" />
-                          {formatCurrency(contract.value)}
-                        </span>
+                        {contract.value !== null && (
+                          <span className="flex items-center gap-1">
+                            <DollarSign className="h-3 w-3" />
+                            {formatCurrency(contract.value)}
+                          </span>
+                        )}
                       </div>
-                      {contract.assetName && (
+                      {contract.asset && (
                         <p className="text-sm text-muted-foreground mt-1">
-                          📦 {contract.assetName} ({contract.assetId})
+                          📦 {contract.asset.name} ({contract.asset.qrCode || contract.asset.id})
                         </p>
                       )}
                       {contract.department && (
-                        <p className="text-sm text-muted-foreground mt-1">
-                          🏢 {contract.department}
-                        </p>
+                        <p className="text-sm text-muted-foreground mt-1">🏢 {contract.department.name}</p>
                       )}
-                      {contract.notes && (
-                        <p className="text-xs text-muted-foreground mt-1">
-                          📝 {contract.notes}
-                        </p>
-                      )}
+                      {contract.notes && <p className="text-xs text-muted-foreground mt-1">📝 {contract.notes}</p>}
                     </div>
                   </div>
                   <DropdownMenu>
@@ -359,7 +474,6 @@ export default function ContratosPage() {
         ))}
       </div>
 
-      {/* Stats */}
       <div className="grid gap-4 md:grid-cols-4">
         <Card>
           <CardContent className="p-6">
@@ -369,7 +483,7 @@ export default function ContratosPage() {
               </div>
               <div>
                 <p className="text-2xl font-bold">
-                  {contracts.filter((c) => c.status === "ACTIVE").length}
+                  {contractsWithExpiry.filter((contract) => contract.status === "ACTIVE").length}
                 </p>
                 <p className="text-sm text-muted-foreground">Activos</p>
               </div>
@@ -385,12 +499,12 @@ export default function ContratosPage() {
               <div>
                 <p className="text-2xl font-bold">
                   {
-                    contracts.filter(
-                      (c) => c.daysUntilExpiry <= 30 && c.status === "ACTIVE"
+                    contractsWithExpiry.filter(
+                      (contract) => contract.daysUntilExpiry <= 30 && contract.status === "ACTIVE"
                     ).length
                   }
                 </p>
-                <p className="text-sm text-muted-foreground">Próximos a vencer</p>
+                <p className="text-sm text-muted-foreground">Proximos a vencer</p>
               </div>
             </div>
           </CardContent>
@@ -403,7 +517,7 @@ export default function ContratosPage() {
               </div>
               <div>
                 <p className="text-2xl font-bold">
-                  {contracts.filter((c) => c.status === "EXPIRED").length}
+                  {contractsWithExpiry.filter((contract) => contract.status === "EXPIRED").length}
                 </p>
                 <p className="text-sm text-muted-foreground">Vencidos</p>
               </div>
@@ -419,9 +533,9 @@ export default function ContratosPage() {
               <div>
                 <p className="text-lg font-bold">
                   {formatCurrency(
-                    contracts
-                      .filter((c) => c.status === "ACTIVE")
-                      .reduce((acc, c) => acc + c.value, 0)
+                    contractsWithExpiry
+                      .filter((contract) => contract.status === "ACTIVE")
+                      .reduce((acc, contract) => acc + (contract.value || 0), 0)
                   )}
                 </p>
                 <p className="text-sm text-muted-foreground">Valor activos</p>

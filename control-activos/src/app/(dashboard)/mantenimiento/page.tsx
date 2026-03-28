@@ -5,21 +5,19 @@ import { motion } from "framer-motion";
 import {
   Wrench,
   Plus,
-  Search,
-  Package,
   Calendar,
   DollarSign,
   Clock,
   CheckCircle,
-  AlertTriangle,
   MoreVertical,
   Eye,
   Edit,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Loading } from "@/components/ui/loading";
 import {
   Dialog,
   DialogContent,
@@ -44,79 +42,41 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useFetch } from "@/lib/hooks/use-fetch";
+import toast from "react-hot-toast";
 
 interface MaintenanceLog {
   id: string;
-  assetId: string;
-  assetName: string;
   type: "PREVENTIVE" | "CORRECTIVE" | "EMERGENCY";
   description: string;
   status: "PENDING" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
   scheduledDate: string;
-  completedDate?: string;
-  cost?: number;
-  technician?: string;
-  notes?: string;
+  completedDate: string | null;
+  cost: number | null;
+  notes: string | null;
+  asset: {
+    id: string;
+    name: string;
+    qrCode: string | null;
+  };
+  technician: {
+    id: string;
+    name: string;
+    lastName: string;
+  } | null;
 }
 
-const maintenanceLogs: MaintenanceLog[] = [
-  {
-    id: "1",
-    assetId: "ACT-0189",
-    assetName: "Impresora HP LaserJet",
-    type: "CORRECTIVE",
-    description: "Papel atascado, revisar rodillos",
-    status: "IN_PROGRESS",
-    scheduledDate: "2024-03-25",
-    technician: "Carlos Mendoza",
-    notes: "Esperando repuesto",
-  },
-  {
-    id: "2",
-    assetId: "ACT-0042",
-    assetName: "Laptop Dell XPS 15",
-    type: "PREVENTIVE",
-    description: "Limpieza general y actualización de software",
-    status: "PENDING",
-    scheduledDate: "2024-04-10",
-    cost: 500,
-  },
-  {
-    id: "3",
-    assetId: "ACT-0201",
-    assetName: "Servidor Dell PowerEdge",
-    type: "PREVENTIVE",
-    description: "Verificación de discos y actualización de firmware",
-    status: "COMPLETED",
-    scheduledDate: "2024-03-15",
-    completedDate: "2024-03-15",
-    cost: 2000,
-    technician: "Carlos Mendoza",
-  },
-  {
-    id: "4",
-    assetId: "ACT-0156",
-    assetName: "Camioneta Toyota Hilux",
-    type: "PREVENTIVE",
-    description: "Cambio de aceite y filtros",
-    status: "PENDING",
-    scheduledDate: "2024-04-05",
-    cost: 3500,
-  },
-  {
-    id: "5",
-    assetId: "ACT-0123",
-    assetName: 'Monitor Samsung 27"',
-    type: "EMERGENCY",
-    description: "Pantalla parpadeando, posible falla de backlight",
-    status: "COMPLETED",
-    scheduledDate: "2024-03-10",
-    completedDate: "2024-03-12",
-    cost: 4500,
-    technician: "Luis García",
-    notes: "Reemplazo de backlight",
-  },
-];
+interface AssetOption {
+  id: string;
+  name: string;
+  qrCode: string | null;
+}
+
+interface UserOption {
+  id: string;
+  name: string;
+  lastName: string;
+}
 
 const typeLabels: Record<string, { label: string; color: string }> = {
   PREVENTIVE: { label: "Preventivo", color: "text-blue-500" },
@@ -124,7 +84,10 @@ const typeLabels: Record<string, { label: string; color: string }> = {
   EMERGENCY: { label: "Emergencia", color: "text-red-500" },
 };
 
-const statusColors: Record<string, { label: string; variant: "warning" | "info" | "success" | "secondary" }> = {
+const statusColors: Record<
+  string,
+  { label: string; variant: "warning" | "info" | "success" | "secondary" }
+> = {
   PENDING: { label: "Pendiente", variant: "warning" },
   IN_PROGRESS: { label: "En progreso", variant: "info" },
   COMPLETED: { label: "Completado", variant: "success" },
@@ -132,7 +95,24 @@ const statusColors: Record<string, { label: string; variant: "warning" | "info" 
 };
 
 export default function MantenimientoPage() {
+  const { data: maintenanceLogs, loading, refetch } = useFetch<MaintenanceLog[]>(
+    "/api/mantenimientos",
+    []
+  );
+  const { data: assets } = useFetch<AssetOption[]>("/api/activos", []);
+  const { data: users } = useFetch<UserOption[]>("/api/usuarios", []);
+
   const [dialogOpen, setDialogOpen] = React.useState(false);
+  const [submitting, setSubmitting] = React.useState(false);
+  const [formData, setFormData] = React.useState({
+    assetId: "",
+    type: "PREVENTIVE" as "PREVENTIVE" | "CORRECTIVE" | "EMERGENCY",
+    description: "",
+    scheduledDate: "",
+    cost: "",
+    technicianId: "",
+    notes: "",
+  });
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("es-MX", {
@@ -150,19 +130,67 @@ export default function MantenimientoPage() {
     });
   };
 
+  const handleCreateMaintenance = async () => {
+    if (!formData.assetId || !formData.description || !formData.scheduledDate) {
+      toast.error("Completa los campos requeridos");
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const response = await fetch("/api/mantenimientos", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          assetId: formData.assetId,
+          type: formData.type,
+          description: formData.description,
+          scheduledDate: formData.scheduledDate,
+          cost: formData.cost ? Number(formData.cost) : undefined,
+          technicianId: formData.technicianId || undefined,
+          notes: formData.notes || undefined,
+        }),
+      });
+
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        toast.error(body?.error ?? "No fue posible crear el mantenimiento");
+        return;
+      }
+
+      toast.success("Mantenimiento creado correctamente");
+      setDialogOpen(false);
+      setFormData({
+        assetId: "",
+        type: "PREVENTIVE",
+        description: "",
+        scheduledDate: "",
+        cost: "",
+        technicianId: "",
+        notes: "",
+      });
+      refetch();
+    } catch {
+      toast.error("No fue posible crear el mantenimiento");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (loading) {
+    return <Loading text="Cargando mantenimientos..." />;
+  }
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       className="space-y-6"
     >
-      {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Mantenimiento</h1>
-          <p className="text-muted-foreground">
-            Programa y gestiona el mantenimiento de activos
-          </p>
+          <p className="text-muted-foreground">Programa y gestiona el mantenimiento de activos</p>
         </div>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
@@ -174,27 +202,37 @@ export default function MantenimientoPage() {
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Nuevo Mantenimiento</DialogTitle>
-              <DialogDescription>
-                Programa un nuevo mantenimiento
-              </DialogDescription>
+              <DialogDescription>Programa un nuevo mantenimiento</DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
               <div className="space-y-2">
                 <Label>Activo *</Label>
-                <Select>
+                <Select
+                  value={formData.assetId}
+                  onValueChange={(value) =>
+                    setFormData((prev) => ({ ...prev, assetId: value }))
+                  }
+                >
                   <SelectTrigger>
                     <SelectValue placeholder="Seleccionar activo" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="ACT-0042">Laptop Dell XPS 15</SelectItem>
-                    <SelectItem value="ACT-0123">Monitor Samsung 27"</SelectItem>
-                    <SelectItem value="ACT-0156">Camioneta Toyota Hilux</SelectItem>
+                    {assets.map((asset) => (
+                      <SelectItem key={asset.id} value={asset.id}>
+                        {asset.name} ({asset.qrCode || asset.id})
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-2">
                 <Label>Tipo *</Label>
-                <Select>
+                <Select
+                  value={formData.type}
+                  onValueChange={(value: "PREVENTIVE" | "CORRECTIVE" | "EMERGENCY") =>
+                    setFormData((prev) => ({ ...prev, type: value }))
+                  }
+                >
                   <SelectTrigger>
                     <SelectValue placeholder="Seleccionar" />
                   </SelectTrigger>
@@ -206,43 +244,81 @@ export default function MantenimientoPage() {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label>Descripción *</Label>
-                <Textarea placeholder="Descripción del mantenimiento..." />
+                <Label>Descripcion *</Label>
+                <Textarea
+                  placeholder="Descripcion del mantenimiento..."
+                  value={formData.description}
+                  onChange={(event) =>
+                    setFormData((prev) => ({ ...prev, description: event.target.value }))
+                  }
+                />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Fecha programada *</Label>
-                  <Input type="date" />
+                  <Input
+                    type="date"
+                    value={formData.scheduledDate}
+                    onChange={(event) =>
+                      setFormData((prev) => ({ ...prev, scheduledDate: event.target.value }))
+                    }
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label>Costo estimado</Label>
-                  <Input type="number" placeholder="0" />
+                  <Input
+                    type="number"
+                    placeholder="0"
+                    value={formData.cost}
+                    onChange={(event) =>
+                      setFormData((prev) => ({ ...prev, cost: event.target.value }))
+                    }
+                  />
                 </div>
               </div>
               <div className="space-y-2">
-                <Label>Técnico</Label>
-                <Select>
+                <Label>Tecnico</Label>
+                <Select
+                  value={formData.technicianId}
+                  onValueChange={(value) =>
+                    setFormData((prev) => ({ ...prev, technicianId: value }))
+                  }
+                >
                   <SelectTrigger>
                     <SelectValue placeholder="Seleccionar" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="carlos">Carlos Mendoza</SelectItem>
-                    <SelectItem value="luis">Luis García</SelectItem>
+                    {users.map((user) => (
+                      <SelectItem key={user.id} value={user.id}>
+                        {user.name} {user.lastName}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Notas</Label>
+                <Textarea
+                  placeholder="Notas adicionales..."
+                  value={formData.notes}
+                  onChange={(event) =>
+                    setFormData((prev) => ({ ...prev, notes: event.target.value }))
+                  }
+                />
               </div>
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setDialogOpen(false)}>
                 Cancelar
               </Button>
-              <Button onClick={() => setDialogOpen(false)}>Programar</Button>
+              <Button onClick={handleCreateMaintenance} disabled={submitting}>
+                {submitting ? "Programando..." : "Programar"}
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
       </div>
 
-      {/* Maintenance List */}
       <div className="space-y-3">
         {maintenanceLogs.map((log, index) => (
           <motion.div
@@ -260,22 +336,20 @@ export default function MantenimientoPage() {
                         log.type === "EMERGENCY"
                           ? "bg-red-500/10"
                           : log.type === "CORRECTIVE"
-                          ? "bg-amber-500/10"
-                          : "bg-blue-500/10"
+                            ? "bg-amber-500/10"
+                            : "bg-blue-500/10"
                       }`}
                     >
-                      <Wrench
-                        className={`h-6 w-6 ${typeLabels[log.type]?.color}`}
-                      />
+                      <Wrench className={`h-6 w-6 ${typeLabels[log.type].color}`} />
                     </div>
                     <div className="flex-1">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-semibold">{log.assetName}</span>
+                        <span className="font-semibold">{log.asset.name}</span>
                         <Badge variant="outline" className="text-xs">
-                          {log.assetId}
+                          {log.asset.qrCode || log.asset.id}
                         </Badge>
-                        <Badge variant={statusColors[log.status]?.variant}>
-                          {statusColors[log.status]?.label}
+                        <Badge variant={statusColors[log.status].variant}>
+                          {statusColors[log.status].label}
                         </Badge>
                       </div>
                       <p className="text-sm mt-1">{log.description}</p>
@@ -291,14 +365,12 @@ export default function MantenimientoPage() {
                           </span>
                         )}
                         {log.technician && (
-                          <span>👤 {log.technician}</span>
+                          <span>
+                            👤 {log.technician.name} {log.technician.lastName}
+                          </span>
                         )}
                       </div>
-                      {log.notes && (
-                        <p className="text-xs text-muted-foreground mt-1">
-                          📝 {log.notes}
-                        </p>
-                      )}
+                      {log.notes && <p className="text-xs text-muted-foreground mt-1">📝 {log.notes}</p>}
                     </div>
                   </div>
                   <DropdownMenu>
@@ -329,7 +401,6 @@ export default function MantenimientoPage() {
         ))}
       </div>
 
-      {/* Stats */}
       <div className="grid gap-4 md:grid-cols-4">
         <Card>
           <CardContent className="p-6">
@@ -339,7 +410,7 @@ export default function MantenimientoPage() {
               </div>
               <div>
                 <p className="text-2xl font-bold">
-                  {maintenanceLogs.filter((l) => l.status === "PENDING").length}
+                  {maintenanceLogs.filter((log) => log.status === "PENDING").length}
                 </p>
                 <p className="text-sm text-muted-foreground">Pendientes</p>
               </div>
@@ -354,7 +425,7 @@ export default function MantenimientoPage() {
               </div>
               <div>
                 <p className="text-2xl font-bold">
-                  {maintenanceLogs.filter((l) => l.status === "IN_PROGRESS").length}
+                  {maintenanceLogs.filter((log) => log.status === "IN_PROGRESS").length}
                 </p>
                 <p className="text-sm text-muted-foreground">En progreso</p>
               </div>
@@ -369,7 +440,7 @@ export default function MantenimientoPage() {
               </div>
               <div>
                 <p className="text-2xl font-bold">
-                  {maintenanceLogs.filter((l) => l.status === "COMPLETED").length}
+                  {maintenanceLogs.filter((log) => log.status === "COMPLETED").length}
                 </p>
                 <p className="text-sm text-muted-foreground">Completados</p>
               </div>
@@ -385,7 +456,7 @@ export default function MantenimientoPage() {
               <div>
                 <p className="text-lg font-bold">
                   {formatCurrency(
-                    maintenanceLogs.reduce((acc, l) => acc + (l.cost || 0), 0)
+                    maintenanceLogs.reduce((acc, log) => acc + (log.cost || 0), 0)
                   )}
                 </p>
                 <p className="text-sm text-muted-foreground">Costo total</p>

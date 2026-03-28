@@ -15,12 +15,13 @@ import {
   MoreVertical,
   CheckCircle,
   XCircle,
-  Clock,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Loading } from "@/components/ui/loading";
 import {
   Dialog,
   DialogContent,
@@ -45,119 +46,100 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useFetch } from "@/lib/hooks/use-fetch";
+import toast from "react-hot-toast";
 
 interface Assignment {
   id: string;
   type: "PERSONAL" | "DEPARTAMENTAL";
   status: "ACTIVE" | "RETURNED" | "TRANSFERRED";
-  assetId: string;
-  assetName: string;
-  assetCategory: string;
-  userId?: string;
-  userName?: string;
-  departmentId?: string;
-  departmentName?: string;
   assignedAt: string;
-  returnedAt?: string;
-  notes?: string;
-  hasSignature: boolean;
+  returnedAt: string | null;
+  notes: string | null;
+  asset: {
+    id: string;
+    name: string;
+    category: {
+      name: string;
+    };
+  };
+  user: {
+    id: string;
+    name: string;
+    lastName: string;
+  } | null;
+  department: {
+    id: string;
+    name: string;
+  } | null;
 }
 
-const assignments: Assignment[] = [
-  {
-    id: "1",
-    type: "PERSONAL",
-    status: "ACTIVE",
-    assetId: "ACT-0042",
-    assetName: "Laptop Dell XPS 15",
-    assetCategory: "Laptops",
-    userId: "1",
-    userName: "Juan Pérez García",
-    departmentId: "1",
-    departmentName: "Tecnología",
-    assignedAt: "2024-01-10",
-    notes: "Equipo nuevo",
-    hasSignature: true,
-  },
-  {
-    id: "2",
-    type: "PERSONAL",
-    status: "ACTIVE",
-    assetId: "ACT-0089",
-    assetName: 'MacBook Pro 14"',
-    assetCategory: "Laptops",
-    userId: "2",
-    userName: "María López García",
-    departmentId: "1",
-    departmentName: "Tecnología",
-    assignedAt: "2024-03-15",
-    hasSignature: true,
-  },
-  {
-    id: "3",
-    type: "DEPARTAMENTAL",
-    status: "ACTIVE",
-    assetId: "ACT-0123",
-    assetName: "Monitor Samsung 27\"",
-    assetCategory: "Monitores",
-    departmentId: "1",
-    departmentName: "Tecnología",
-    assignedAt: "2024-02-20",
-    notes: "Sala de juntas",
-    hasSignature: false,
-  },
-  {
-    id: "4",
-    type: "PERSONAL",
-    status: "ACTIVE",
-    assetId: "ACT-0156",
-    assetName: "Camioneta Toyota Hilux",
-    assetCategory: "Vehículos",
-    userId: "3",
-    userName: "Pedro Ruiz Martínez",
-    departmentId: "3",
-    departmentName: "Ventas",
-    assignedAt: "2024-01-05",
-    hasSignature: true,
-  },
-  {
-    id: "5",
-    type: "PERSONAL",
-    status: "RETURNED",
-    assetId: "ACT-0189",
-    assetName: "Impresora HP LaserJet",
-    assetCategory: "Periféricos",
-    userId: "4",
-    userName: "Ana Torres Sánchez",
-    departmentId: "4",
-    departmentName: "Administración",
-    assignedAt: "2023-06-10",
-    returnedAt: "2024-03-01",
-    notes: "Enviada a mantenimiento",
-    hasSignature: true,
-  },
-];
+interface AssetOption {
+  id: string;
+  name: string;
+  qrCode: string | null;
+  status: string;
+}
 
-const statusColors: Record<string, { label: string; variant: "success" | "warning" | "secondary"; icon: any }> = {
+interface UserOption {
+  id: string;
+  name: string;
+  lastName: string;
+}
+
+interface DepartmentOption {
+  id: string;
+  name: string;
+}
+
+const statusColors: Record<
+  Assignment["status"],
+  { label: string; variant: "success" | "warning" | "secondary"; icon: LucideIcon }
+> = {
   ACTIVE: { label: "Activo", variant: "success", icon: CheckCircle },
   RETURNED: { label: "Devuelto", variant: "secondary", icon: XCircle },
   TRANSFERRED: { label: "Transferido", variant: "warning", icon: ArrowLeftRight },
 };
 
 export default function AsignacionesPage() {
+  const {
+    data: assignments,
+    loading,
+    refetch,
+  } = useFetch<Assignment[]>("/api/asignaciones", []);
+  const { data: assets } = useFetch<AssetOption[]>("/api/activos", []);
+  const { data: users } = useFetch<UserOption[]>("/api/usuarios", []);
+  const { data: departments } = useFetch<DepartmentOption[]>("/api/departamentos", []);
+
   const [searchQuery, setSearchQuery] = React.useState("");
   const [statusFilter, setStatusFilter] = React.useState("all");
   const [typeFilter, setTypeFilter] = React.useState("all");
   const [dialogOpen, setDialogOpen] = React.useState(false);
+  const [submitting, setSubmitting] = React.useState(false);
+  const [formData, setFormData] = React.useState({
+    type: "PERSONAL" as "PERSONAL" | "DEPARTAMENTAL",
+    assetId: "",
+    userId: "",
+    departmentId: "",
+    notes: "",
+  });
 
-  const filteredAssignments = assignments.filter((a) => {
+  const availableAssets = assets.filter((asset) => asset.status === "AVAILABLE");
+
+  const filteredAssignments = assignments.filter((assignment) => {
+    const searchText = searchQuery.toLowerCase();
+    const userName = assignment.user
+      ? `${assignment.user.name} ${assignment.user.lastName}`.toLowerCase()
+      : "";
+
     const matchesSearch =
-      a.assetName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      a.assetId.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      a.userName?.toLowerCase().includes(searchQuery.toLowerCase());
+      assignment.asset.name.toLowerCase().includes(searchText) ||
+      assignment.asset.id.toLowerCase().includes(searchText) ||
+      assignment.department?.name.toLowerCase().includes(searchText) ||
+      userName.includes(searchText);
 
-    const matchesStatus = statusFilter === "all" || a.status === statusFilter;
-    const matchesType = typeFilter === "all" || a.type === typeFilter;
+    const matchesStatus = statusFilter === "all" || assignment.status === statusFilter;
+    const matchesType = typeFilter === "all" || assignment.type === typeFilter;
 
     return matchesSearch && matchesStatus && matchesType;
   });
@@ -170,13 +152,76 @@ export default function AsignacionesPage() {
     });
   };
 
+  const resetForm = () => {
+    setFormData({
+      type: "PERSONAL",
+      assetId: "",
+      userId: "",
+      departmentId: "",
+      notes: "",
+    });
+  };
+
+  const handleCreateAssignment = async () => {
+    if (!formData.assetId) {
+      toast.error("Selecciona un activo");
+      return;
+    }
+
+    if (formData.type === "PERSONAL" && !formData.userId) {
+      toast.error("Selecciona un usuario");
+      return;
+    }
+
+    if (formData.type === "DEPARTAMENTAL" && !formData.departmentId) {
+      toast.error("Selecciona un departamento");
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const payload = {
+        type: formData.type,
+        assetId: formData.assetId,
+        userId: formData.type === "PERSONAL" ? formData.userId : undefined,
+        departmentId:
+          formData.type === "DEPARTAMENTAL" ? formData.departmentId : undefined,
+        notes: formData.notes || undefined,
+      };
+
+      const response = await fetch("/api/asignaciones", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        toast.error(body?.error ?? "No fue posible crear la asignacion");
+        return;
+      }
+
+      toast.success("Asignacion creada correctamente");
+      setDialogOpen(false);
+      resetForm();
+      refetch();
+    } catch {
+      toast.error("No fue posible crear la asignacion");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (loading) {
+    return <Loading text="Cargando asignaciones..." />;
+  }
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       className="space-y-6"
     >
-      {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Asignaciones</h1>
@@ -188,65 +233,120 @@ export default function AsignacionesPage() {
           <DialogTrigger asChild>
             <Button>
               <Plus className="h-4 w-4 mr-2" />
-              Nueva Asignación
+              Nueva Asignacion
             </Button>
           </DialogTrigger>
           <DialogContent className="sm:max-w-[500px]">
             <DialogHeader>
-              <DialogTitle>Nueva Asignación</DialogTitle>
+              <DialogTitle>Nueva Asignacion</DialogTitle>
               <DialogDescription>
                 Asigna un activo a un usuario o departamento
               </DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
               <div className="space-y-2">
-                <Label>Tipo de asignación *</Label>
-                <Select>
+                <Label>Tipo de asignacion *</Label>
+                <Select
+                  value={formData.type}
+                  onValueChange={(value: "PERSONAL" | "DEPARTAMENTAL") =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      type: value,
+                      userId: "",
+                      departmentId: "",
+                    }))
+                  }
+                >
                   <SelectTrigger>
                     <SelectValue placeholder="Seleccionar" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="PERSONAL">Personal (a un usuario)</SelectItem>
-                    <SelectItem value="DEPARTAMENTAL">
-                      Departamental (a un área)
-                    </SelectItem>
+                    <SelectItem value="DEPARTAMENTAL">Departamental (a un area)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
+
               <div className="space-y-2">
                 <Label>Activo *</Label>
-                <Select>
+                <Select
+                  value={formData.assetId}
+                  onValueChange={(value) =>
+                    setFormData((prev) => ({ ...prev, assetId: value }))
+                  }
+                >
                   <SelectTrigger>
                     <SelectValue placeholder="Seleccionar activo" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="ACT-0123">
-                      Monitor Samsung 27" (ACT-0123)
-                    </SelectItem>
-                    <SelectItem value="ACT-0189">
-                      Impresora HP LaserJet (ACT-0189)
-                    </SelectItem>
+                    {availableAssets.length > 0 ? (
+                      availableAssets.map((asset) => (
+                        <SelectItem key={asset.id} value={asset.id}>
+                          {asset.name} ({asset.qrCode || asset.id})
+                        </SelectItem>
+                      ))
+                    ) : (
+                      <SelectItem value="no-assets" disabled>
+                        No hay activos disponibles
+                      </SelectItem>
+                    )}
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-2">
-                <Label>Usuario *</Label>
-                <Select>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Seleccionar usuario" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="1">Juan Pérez García</SelectItem>
-                    <SelectItem value="2">María López García</SelectItem>
-                    <SelectItem value="3">Pedro Ruiz Martínez</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+
+              {formData.type === "PERSONAL" ? (
+                <div className="space-y-2">
+                  <Label>Usuario *</Label>
+                  <Select
+                    value={formData.userId}
+                    onValueChange={(value) =>
+                      setFormData((prev) => ({ ...prev, userId: value }))
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Seleccionar usuario" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {users.map((user) => (
+                        <SelectItem key={user.id} value={user.id}>
+                          {user.name} {user.lastName}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <Label>Departamento *</Label>
+                  <Select
+                    value={formData.departmentId}
+                    onValueChange={(value) =>
+                      setFormData((prev) => ({ ...prev, departmentId: value }))
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Seleccionar departamento" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {departments.map((department) => (
+                        <SelectItem key={department.id} value={department.id}>
+                          {department.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
               <div className="space-y-2">
                 <Label>Notas</Label>
                 <Textarea
-                  placeholder="Observaciones sobre la asignación..."
+                  placeholder="Observaciones sobre la asignacion..."
                   rows={2}
+                  value={formData.notes}
+                  onChange={(event) =>
+                    setFormData((prev) => ({ ...prev, notes: event.target.value }))
+                  }
                 />
               </div>
             </div>
@@ -254,20 +354,21 @@ export default function AsignacionesPage() {
               <Button variant="outline" onClick={() => setDialogOpen(false)}>
                 Cancelar
               </Button>
-              <Button onClick={() => setDialogOpen(false)}>Asignar</Button>
+              <Button onClick={handleCreateAssignment} disabled={submitting}>
+                {submitting ? "Asignando..." : "Asignar"}
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
       </div>
 
-      {/* Filters */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Buscar por activo, usuario..."
+            placeholder="Buscar por activo, usuario o departamento..."
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(event) => setSearchQuery(event.target.value)}
             className="pl-10"
           />
         </div>
@@ -294,10 +395,9 @@ export default function AsignacionesPage() {
         </Select>
       </div>
 
-      {/* Assignments List */}
       <div className="space-y-3">
         {filteredAssignments.map((assignment, index) => {
-          const StatusIcon = statusColors[assignment.status]?.icon;
+          const StatusIcon = statusColors[assignment.status].icon;
           return (
             <motion.div
               key={assignment.id}
@@ -314,40 +414,33 @@ export default function AsignacionesPage() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-semibold">{assignment.assetName}</span>
+                          <span className="font-semibold">{assignment.asset.name}</span>
                           <Badge variant="outline" className="text-xs">
-                            {assignment.assetId}
+                            {assignment.asset.id}
                           </Badge>
-                          <Badge variant={statusColors[assignment.status]?.variant}>
+                          <Badge variant={statusColors[assignment.status].variant}>
                             <StatusIcon className="h-3 w-3 mr-1" />
-                            {statusColors[assignment.status]?.label}
+                            {statusColors[assignment.status].label}
                           </Badge>
                         </div>
-                        <div className="flex items-center gap-4 mt-1 text-sm text-muted-foreground">
-                          {assignment.userName && (
+                        <div className="flex items-center gap-4 mt-1 text-sm text-muted-foreground flex-wrap">
+                          {assignment.user && (
                             <span className="flex items-center gap-1">
                               <Users className="h-3 w-3" />
-                              {assignment.userName}
+                              {assignment.user.name} {assignment.user.lastName}
                             </span>
                           )}
                           <span className="flex items-center gap-1">
                             <Building2 className="h-3 w-3" />
-                            {assignment.departmentName}
+                            {assignment.department?.name || "Sin departamento"}
                           </span>
                           <span className="flex items-center gap-1">
                             <Calendar className="h-3 w-3" />
                             {formatDate(assignment.assignedAt)}
                           </span>
-                          {assignment.hasSignature && (
-                            <Badge variant="success" className="text-xs">
-                              ✍️ Firmado
-                            </Badge>
-                          )}
                         </div>
                         {assignment.notes && (
-                          <p className="text-xs text-muted-foreground mt-1">
-                            📝 {assignment.notes}
-                          </p>
+                          <p className="text-xs text-muted-foreground mt-1">📝 {assignment.notes}</p>
                         )}
                       </div>
                     </div>
@@ -386,7 +479,6 @@ export default function AsignacionesPage() {
         })}
       </div>
 
-      {/* Stats */}
       <div className="grid gap-4 md:grid-cols-4">
         <Card>
           <CardContent className="p-6">
@@ -396,7 +488,7 @@ export default function AsignacionesPage() {
               </div>
               <div>
                 <p className="text-2xl font-bold">
-                  {assignments.filter((a) => a.status === "ACTIVE").length}
+                  {assignments.filter((assignment) => assignment.status === "ACTIVE").length}
                 </p>
                 <p className="text-sm text-muted-foreground">Activas</p>
               </div>
@@ -411,7 +503,7 @@ export default function AsignacionesPage() {
               </div>
               <div>
                 <p className="text-2xl font-bold">
-                  {assignments.filter((a) => a.type === "PERSONAL").length}
+                  {assignments.filter((assignment) => assignment.type === "PERSONAL").length}
                 </p>
                 <p className="text-sm text-muted-foreground">Personales</p>
               </div>
@@ -426,7 +518,7 @@ export default function AsignacionesPage() {
               </div>
               <div>
                 <p className="text-2xl font-bold">
-                  {assignments.filter((a) => a.type === "DEPARTAMENTAL").length}
+                  {assignments.filter((assignment) => assignment.type === "DEPARTAMENTAL").length}
                 </p>
                 <p className="text-sm text-muted-foreground">Departamentales</p>
               </div>
@@ -437,13 +529,13 @@ export default function AsignacionesPage() {
           <CardContent className="p-6">
             <div className="flex items-center gap-4">
               <div className="p-3 rounded-xl bg-primary/10">
-                <span className="text-xl">✍️</span>
+                <Package className="h-6 w-6 text-primary" />
               </div>
               <div>
                 <p className="text-2xl font-bold">
-                  {assignments.filter((a) => a.hasSignature).length}
+                  {assignments.filter((assignment) => assignment.status === "RETURNED").length}
                 </p>
-                <p className="text-sm text-muted-foreground">Con firma</p>
+                <p className="text-sm text-muted-foreground">Devueltas</p>
               </div>
             </div>
           </CardContent>

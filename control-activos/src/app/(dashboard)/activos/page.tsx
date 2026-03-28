@@ -82,12 +82,6 @@ const statusConfig: Record<string, { label: string; variant: "success" | "info" 
   RETIRED: { label: "Dado de baja", variant: "destructive" },
 };
 
-const ensConfig: Record<string, { label: string; color: string }> = {
-  BASIC: { label: "Básico", color: "text-emerald-500" },
-  MEDIUM: { label: "Medio", color: "text-amber-500" },
-  HIGH: { label: "Alto", color: "text-red-500" },
-};
-
 export default function ActivosPage() {
   const { data: assets, loading: loadingAssets, refetch: refetchAssets } = useFetch<Asset[]>("/api/activos", []);
   const { data: categories } = useFetch<Category[]>("/api/categorias", []);
@@ -159,7 +153,7 @@ export default function ActivosPage() {
       } else {
         toast.error("Error al crear el activo");
       }
-    } catch (error) {
+    } catch {
       toast.error("Error al crear el activo");
     } finally {
       setSubmitting(false);

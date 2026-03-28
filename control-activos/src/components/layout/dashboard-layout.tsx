@@ -4,6 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
+import { signOut } from "next-auth/react";
 import {
   LayoutDashboard,
   Package,
@@ -89,7 +90,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         <div className="flex flex-col h-full">
           {/* Logo */}
           <div className="flex items-center justify-between h-16 px-6 border-b">
-            <Link href="/dashboard" className="flex items-center gap-3">
+            <Link href="/" className="flex items-center gap-3">
               <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-primary text-primary-foreground font-bold text-lg">
                 CA
               </div>
@@ -244,7 +245,10 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                   <span>Configuración</span>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem className="text-destructive">
+                <DropdownMenuItem
+                  className="text-destructive"
+                  onClick={() => signOut({ callbackUrl: "/login" })}
+                >
                   <LogOut className="mr-2 h-4 w-4" />
                   <span>Cerrar sesión</span>
                 </DropdownMenuItem>

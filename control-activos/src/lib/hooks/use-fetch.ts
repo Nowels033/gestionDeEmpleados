@@ -10,6 +10,7 @@ interface UseFetchResult<T> {
 }
 
 export function useFetch<T>(url: string, defaultValue: T): UseFetchResult<T> {
+  const defaultValueRef = React.useRef(defaultValue);
   const [data, setData] = React.useState<T>(defaultValue);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
@@ -27,20 +28,22 @@ export function useFetch<T>(url: string, defaultValue: T): UseFetchResult<T> {
 
       const result = await response.json();
 
+      const safeDefaultValue = defaultValueRef.current;
+
       // Validar que el resultado sea del tipo esperado
-      if (Array.isArray(defaultValue)) {
-        setData((Array.isArray(result) ? result : defaultValue) as T);
+      if (Array.isArray(safeDefaultValue)) {
+        setData((Array.isArray(result) ? result : safeDefaultValue) as T);
       } else {
-        setData((result || defaultValue) as T);
+        setData((result || safeDefaultValue) as T);
       }
     } catch (err) {
       console.error(`Error fetching ${url}:`, err);
       setError("Error al cargar datos");
-      setData(defaultValue);
+      setData(defaultValueRef.current);
     } finally {
       setLoading(false);
     }
-  }, [url, defaultValue]);
+  }, [url]);
 
   React.useEffect(() => {
     fetchData();

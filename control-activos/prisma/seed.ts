@@ -1,9 +1,11 @@
 import { PrismaClient } from "@prisma/client";
+import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
 
 async function main() {
   console.log("Creando datos de ejemplo...");
+  const defaultPasswordHash = await bcrypt.hash("admin12345", 12);
 
   // Crear departamentos (upsert)
   const tech = await prisma.department.upsert({
@@ -73,10 +75,15 @@ async function main() {
   // Crear usuario admin (upsert)
   const admin = await prisma.user.upsert({
     where: { email: "admin@empresa.com" },
-    update: {},
+    update: {
+      password: defaultPasswordHash,
+      role: "ADMIN",
+      isActive: true,
+      departmentId: tech.id,
+    },
     create: {
       email: "admin@empresa.com",
-      password: "$2a$10$dummy.hash.for.development",
+      password: defaultPasswordHash,
       name: "Admin",
       lastName: "Sistema",
       employeeNumber: "EMP-0001",
@@ -90,10 +97,15 @@ async function main() {
   // Crear usuario de ejemplo (upsert)
   const user = await prisma.user.upsert({
     where: { email: "juan@empresa.com" },
-    update: {},
+    update: {
+      password: defaultPasswordHash,
+      role: "USER",
+      isActive: true,
+      departmentId: tech.id,
+    },
     create: {
       email: "juan@empresa.com",
-      password: "$2a$10$dummy.hash.for.development",
+      password: defaultPasswordHash,
       name: "Juan",
       lastName: "Pérez García",
       phone: "+52 55 1234 5678",
@@ -174,6 +186,7 @@ async function main() {
   console.log(`- Categorías: 3`);
   console.log(`- Usuarios: 2`);
   console.log(`- Activos: 3`);
+  console.log(`- Password demo: admin12345`);
 }
 
 main()

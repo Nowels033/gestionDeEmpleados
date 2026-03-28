@@ -7,7 +7,6 @@ import {
   Plus,
   Search,
   Mail,
-  Phone,
   Building2,
   Package,
   FileText,
@@ -15,11 +14,10 @@ import {
   Trash2,
   MoreVertical,
   Eye,
-  Upload,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -32,7 +30,6 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -49,122 +46,36 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
+import { Loading } from "@/components/ui/loading";
+import { useFetch } from "@/lib/hooks/use-fetch";
+import toast from "react-hot-toast";
 
 interface User {
   id: string;
   name: string;
   lastName: string;
   email: string;
-  phone: string;
+  phone: string | null;
   photo: string | null;
   employeeNumber: string;
   position: string;
-  department: string;
   hireDate: string;
   role: "ADMIN" | "EDITOR" | "USER";
   isActive: boolean;
-  assetCount: number;
-  documents: { name: string; type: string; size: string }[];
+  department: {
+    id: string;
+    name: string;
+  };
+  _count: {
+    assignments: number;
+    documents: number;
+  };
 }
 
-const users: User[] = [
-  {
-    id: "1",
-    name: "Juan",
-    lastName: "Pérez García",
-    email: "juan@empresa.com",
-    phone: "+52 55 1234 5678",
-    photo: null,
-    employeeNumber: "EMP-0042",
-    position: "Desarrollador Senior",
-    department: "Tecnología",
-    hireDate: "2023-03-15",
-    role: "USER",
-    isActive: true,
-    assetCount: 2,
-    documents: [
-      { name: "INE_frente.pdf", type: "INE", size: "2.1 MB" },
-      { name: "Contrato_2023.pdf", type: "Contrato", size: "1.5 MB" },
-      { name: "Comprobante.pdf", type: "Domicilio", size: "0.8 MB" },
-    ],
-  },
-  {
-    id: "2",
-    name: "María",
-    lastName: "López García",
-    email: "maria@empresa.com",
-    phone: "+52 55 2345 6789",
-    photo: null,
-    employeeNumber: "EMP-0015",
-    position: "Líder de Tecnología",
-    department: "Tecnología",
-    hireDate: "2021-06-01",
-    role: "EDITOR",
-    isActive: true,
-    assetCount: 3,
-    documents: [
-      { name: "INE_frente.pdf", type: "INE", size: "2.0 MB" },
-      { name: "Contrato_2021.pdf", type: "Contrato", size: "1.4 MB" },
-    ],
-  },
-  {
-    id: "3",
-    name: "Pedro",
-    lastName: "Ruiz Martínez",
-    email: "pedro@empresa.com",
-    phone: "+52 55 3456 7890",
-    photo: null,
-    employeeNumber: "EMP-0089",
-    position: "Ejecutivo de Ventas",
-    department: "Ventas",
-    hireDate: "2022-01-10",
-    role: "USER",
-    isActive: true,
-    assetCount: 4,
-    documents: [
-      { name: "INE_frente.pdf", type: "INE", size: "1.9 MB" },
-      { name: "Licencia_conducir.pdf", type: "Licencia", size: "0.5 MB" },
-    ],
-  },
-  {
-    id: "4",
-    name: "Ana",
-    lastName: "Torres Sánchez",
-    email: "ana@empresa.com",
-    phone: "+52 55 4567 8901",
-    photo: null,
-    employeeNumber: "EMP-0023",
-    position: "Directora de Administración",
-    department: "Administración",
-    hireDate: "2020-09-01",
-    role: "ADMIN",
-    isActive: true,
-    assetCount: 1,
-    documents: [
-      { name: "INE_frente.pdf", type: "INE", size: "2.2 MB" },
-      { name: "Contrato_2020.pdf", type: "Contrato", size: "1.6 MB" },
-    ],
-  },
-  {
-    id: "5",
-    name: "Carlos",
-    lastName: "Mendoza Rivera",
-    email: "carlos@empresa.com",
-    phone: "+52 55 5678 9012",
-    photo: null,
-    employeeNumber: "EMP-0156",
-    position: "Responsable de Seguridad",
-    department: "Tecnología",
-    hireDate: "2019-04-15",
-    role: "EDITOR",
-    isActive: true,
-    assetCount: 0,
-    documents: [
-      { name: "INE_frente.pdf", type: "INE", size: "2.3 MB" },
-      { name: "Certificado_seguridad.pdf", type: "Certificado", size: "0.9 MB" },
-    ],
-  },
-];
+interface Department {
+  id: string;
+  name: string;
+}
 
 const roleColors: Record<string, { label: string; variant: "default" | "secondary" | "outline" }> = {
   ADMIN: { label: "Admin", variant: "default" },
@@ -173,10 +84,26 @@ const roleColors: Record<string, { label: string; variant: "default" | "secondar
 };
 
 export default function UsuariosPage() {
+  const { data: users, loading, refetch } = useFetch<User[]>("/api/usuarios", []);
+  const { data: departments } = useFetch<Department[]>("/api/departamentos", []);
+
   const [searchQuery, setSearchQuery] = React.useState("");
   const [dialogOpen, setDialogOpen] = React.useState(false);
   const [selectedUser, setSelectedUser] = React.useState<User | null>(null);
   const [detailDialogOpen, setDetailDialogOpen] = React.useState(false);
+  const [submitting, setSubmitting] = React.useState(false);
+  const [formData, setFormData] = React.useState({
+    name: "",
+    lastName: "",
+    email: "",
+    phone: "",
+    employeeNumber: "",
+    position: "",
+    departmentId: "",
+    hireDate: "",
+    role: "USER" as "ADMIN" | "EDITOR" | "USER",
+    password: "",
+  });
 
   const filteredUsers = users.filter(
     (user) =>
@@ -190,19 +117,75 @@ export default function UsuariosPage() {
     return `${name.charAt(0)}${lastName.charAt(0)}`.toUpperCase();
   };
 
+  const resetForm = () => {
+    setFormData({
+      name: "",
+      lastName: "",
+      email: "",
+      phone: "",
+      employeeNumber: "",
+      position: "",
+      departmentId: "",
+      hireDate: "",
+      role: "USER",
+      password: "",
+    });
+  };
+
+  const handleCreateUser = async () => {
+    if (
+      !formData.name ||
+      !formData.lastName ||
+      !formData.email ||
+      !formData.employeeNumber ||
+      !formData.position ||
+      !formData.departmentId ||
+      !formData.hireDate ||
+      !formData.password
+    ) {
+      toast.error("Completa los campos requeridos");
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const response = await fetch("/api/usuarios", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(formData),
+      });
+
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        toast.error(body?.error ?? "No fue posible crear el usuario");
+        return;
+      }
+
+      toast.success("Usuario creado correctamente");
+      setDialogOpen(false);
+      resetForm();
+      refetch();
+    } catch {
+      toast.error("No fue posible crear el usuario");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (loading) {
+    return <Loading text="Cargando usuarios..." />;
+  }
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       className="space-y-6"
     >
-      {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Usuarios</h1>
-          <p className="text-muted-foreground">
-            Gestiona los usuarios y sus documentos
-          </p>
+          <p className="text-muted-foreground">Gestiona los usuarios y sus documentos</p>
         </div>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
@@ -214,60 +197,127 @@ export default function UsuariosPage() {
           <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Nuevo Usuario</DialogTitle>
-              <DialogDescription>
-                Ingresa los datos del nuevo usuario
-              </DialogDescription>
+              <DialogDescription>Ingresa los datos del nuevo usuario</DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="name">Nombre *</Label>
-                  <Input id="name" placeholder="Juan" />
+                  <Input
+                    id="name"
+                    placeholder="Juan"
+                    value={formData.name}
+                    onChange={(event) =>
+                      setFormData((prev) => ({ ...prev, name: event.target.value }))
+                    }
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="lastName">Apellidos *</Label>
-                  <Input id="lastName" placeholder="Pérez García" />
+                  <Input
+                    id="lastName"
+                    placeholder="Perez Garcia"
+                    value={formData.lastName}
+                    onChange={(event) =>
+                      setFormData((prev) => ({ ...prev, lastName: event.target.value }))
+                    }
+                  />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="email">Email *</Label>
-                  <Input id="email" type="email" placeholder="juan@empresa.com" />
+                  <Input
+                    id="email"
+                    type="email"
+                    placeholder="juan@empresa.com"
+                    value={formData.email}
+                    onChange={(event) =>
+                      setFormData((prev) => ({ ...prev, email: event.target.value }))
+                    }
+                  />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="phone">Teléfono</Label>
-                  <Input id="phone" placeholder="+52 55 1234 5678" />
+                  <Label htmlFor="phone">Telefono</Label>
+                  <Input
+                    id="phone"
+                    placeholder="+52 55 1234 5678"
+                    value={formData.phone}
+                    onChange={(event) =>
+                      setFormData((prev) => ({ ...prev, phone: event.target.value }))
+                    }
+                  />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="position">Puesto *</Label>
-                  <Input id="position" placeholder="Desarrollador" />
+                  <Label htmlFor="employeeNumber">Numero de empleado *</Label>
+                  <Input
+                    id="employeeNumber"
+                    placeholder="EMP-0042"
+                    value={formData.employeeNumber}
+                    onChange={(event) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        employeeNumber: event.target.value,
+                      }))
+                    }
+                  />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="department">Departamento *</Label>
-                  <Select>
+                  <Label htmlFor="position">Puesto *</Label>
+                  <Input
+                    id="position"
+                    placeholder="Desarrollador"
+                    value={formData.position}
+                    onChange={(event) =>
+                      setFormData((prev) => ({ ...prev, position: event.target.value }))
+                    }
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Departamento *</Label>
+                  <Select
+                    value={formData.departmentId}
+                    onValueChange={(value) =>
+                      setFormData((prev) => ({ ...prev, departmentId: value }))
+                    }
+                  >
                     <SelectTrigger>
                       <SelectValue placeholder="Seleccionar" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="tech">Tecnología</SelectItem>
-                      <SelectItem value="ops">Operaciones</SelectItem>
-                      <SelectItem value="sales">Ventas</SelectItem>
-                      <SelectItem value="admin">Administración</SelectItem>
-                      <SelectItem value="marketing">Marketing</SelectItem>
+                      {departments.map((department) => (
+                        <SelectItem key={department.id} value={department.id}>
+                          {department.name}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="hireDate">Fecha de ingreso *</Label>
+                  <Input
+                    id="hireDate"
+                    type="date"
+                    value={formData.hireDate}
+                    onChange={(event) =>
+                      setFormData((prev) => ({ ...prev, hireDate: event.target.value }))
+                    }
+                  />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="hireDate">Fecha de ingreso *</Label>
-                  <Input id="hireDate" type="date" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="role">Rol</Label>
-                  <Select>
+                  <Label>Rol</Label>
+                  <Select
+                    value={formData.role}
+                    onValueChange={(value: "ADMIN" | "EDITOR" | "USER") =>
+                      setFormData((prev) => ({ ...prev, role: value }))
+                    }
+                  >
                     <SelectTrigger>
                       <SelectValue placeholder="Seleccionar" />
                     </SelectTrigger>
@@ -278,17 +328,17 @@ export default function UsuariosPage() {
                     </SelectContent>
                   </Select>
                 </div>
-              </div>
-              <div className="space-y-2">
-                <Label>Foto de perfil</Label>
-                <div className="flex items-center gap-4">
-                  <Avatar className="h-16 w-16">
-                    <AvatarFallback>?</AvatarFallback>
-                  </Avatar>
-                  <Button variant="outline" size="sm">
-                    <Upload className="h-4 w-4 mr-2" />
-                    Subir foto
-                  </Button>
+                <div className="space-y-2">
+                  <Label htmlFor="password">Contrasena *</Label>
+                  <Input
+                    id="password"
+                    type="password"
+                    placeholder="Minimo 8 caracteres"
+                    value={formData.password}
+                    onChange={(event) =>
+                      setFormData((prev) => ({ ...prev, password: event.target.value }))
+                    }
+                  />
                 </div>
               </div>
             </div>
@@ -296,24 +346,24 @@ export default function UsuariosPage() {
               <Button variant="outline" onClick={() => setDialogOpen(false)}>
                 Cancelar
               </Button>
-              <Button onClick={() => setDialogOpen(false)}>Guardar</Button>
+              <Button onClick={handleCreateUser} disabled={submitting}>
+                {submitting ? "Guardando..." : "Guardar"}
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
       </div>
 
-      {/* Search */}
       <div className="relative max-w-md">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
-          placeholder="Buscar por nombre, email o número de empleado..."
+          placeholder="Buscar por nombre, email o numero de empleado..."
           value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
+          onChange={(event) => setSearchQuery(event.target.value)}
           className="pl-10"
         />
       </div>
 
-      {/* Users Grid */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {filteredUsers.map((user, index) => (
           <motion.div
@@ -336,9 +386,7 @@ export default function UsuariosPage() {
                       <h3 className="font-semibold">
                         {user.name} {user.lastName}
                       </h3>
-                      <p className="text-sm text-muted-foreground">
-                        {user.position}
-                      </p>
+                      <p className="text-sm text-muted-foreground">{user.position}</p>
                     </div>
                   </div>
                   <DropdownMenu>
@@ -377,8 +425,8 @@ export default function UsuariosPage() {
                 <div className="space-y-2 text-sm">
                   <div className="flex items-center gap-2">
                     <Badge variant="outline">{user.employeeNumber}</Badge>
-                    <Badge variant={roleColors[user.role]?.variant}>
-                      {roleColors[user.role]?.label}
+                    <Badge variant={roleColors[user.role].variant}>
+                      {roleColors[user.role].label}
                     </Badge>
                   </div>
                   <div className="flex items-center gap-2 text-muted-foreground">
@@ -387,15 +435,15 @@ export default function UsuariosPage() {
                   </div>
                   <div className="flex items-center gap-2 text-muted-foreground">
                     <Building2 className="h-4 w-4" />
-                    <span>{user.department}</span>
+                    <span>{user.department.name}</span>
                   </div>
                   <div className="flex items-center gap-2 text-muted-foreground">
                     <Package className="h-4 w-4" />
-                    <span>{user.assetCount} activos asignados</span>
+                    <span>{user._count.assignments} activos asignados</span>
                   </div>
                   <div className="flex items-center gap-2 text-muted-foreground">
                     <FileText className="h-4 w-4" />
-                    <span>{user.documents.length} documentos</span>
+                    <span>{user._count.documents} documentos</span>
                   </div>
                 </div>
 
@@ -416,7 +464,6 @@ export default function UsuariosPage() {
         ))}
       </div>
 
-      {/* User Detail Dialog */}
       <Dialog open={detailDialogOpen} onOpenChange={setDetailDialogOpen}>
         <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
           {selectedUser && (
@@ -441,9 +488,8 @@ export default function UsuariosPage() {
               </DialogHeader>
 
               <Tabs defaultValue="info" className="mt-4">
-                <TabsList className="grid w-full grid-cols-3">
-                  <TabsTrigger value="info">Información</TabsTrigger>
-                  <TabsTrigger value="documents">Documentos</TabsTrigger>
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="info">Informacion</TabsTrigger>
                   <TabsTrigger value="assets">Activos</TabsTrigger>
                 </TabsList>
 
@@ -454,33 +500,27 @@ export default function UsuariosPage() {
                       <p className="font-medium">{selectedUser.email}</p>
                     </div>
                     <div>
-                      <Label className="text-muted-foreground">Teléfono</Label>
-                      <p className="font-medium">{selectedUser.phone}</p>
+                      <Label className="text-muted-foreground">Telefono</Label>
+                      <p className="font-medium">{selectedUser.phone || "No registrado"}</p>
                     </div>
                     <div>
-                      <Label className="text-muted-foreground">
-                        Número de empleado
-                      </Label>
+                      <Label className="text-muted-foreground">Numero de empleado</Label>
+                      <p className="font-medium">{selectedUser.employeeNumber}</p>
+                    </div>
+                    <div>
+                      <Label className="text-muted-foreground">Departamento</Label>
+                      <p className="font-medium">{selectedUser.department.name}</p>
+                    </div>
+                    <div>
+                      <Label className="text-muted-foreground">Fecha de ingreso</Label>
                       <p className="font-medium">
-                        {selectedUser.employeeNumber}
+                        {new Date(selectedUser.hireDate).toLocaleDateString("es-MX")}
                       </p>
                     </div>
                     <div>
-                      <Label className="text-muted-foreground">
-                        Departamento
-                      </Label>
-                      <p className="font-medium">{selectedUser.department}</p>
-                    </div>
-                    <div>
-                      <Label className="text-muted-foreground">
-                        Fecha de ingreso
-                      </Label>
-                      <p className="font-medium">{selectedUser.hireDate}</p>
-                    </div>
-                    <div>
                       <Label className="text-muted-foreground">Rol</Label>
-                      <Badge variant={roleColors[selectedUser.role]?.variant}>
-                        {roleColors[selectedUser.role]?.label}
+                      <Badge variant={roleColors[selectedUser.role].variant}>
+                        {roleColors[selectedUser.role].label}
                       </Badge>
                     </div>
                   </div>
@@ -488,97 +528,25 @@ export default function UsuariosPage() {
                   <Separator />
 
                   <div>
-                    <Label className="text-muted-foreground mb-2 block">
-                      Firma Digital
-                    </Label>
-                    <div className="flex items-center gap-3">
-                      <div className="flex-1 h-20 border-2 border-dashed rounded-lg flex items-center justify-center text-muted-foreground">
-                        <span className="text-sm">
-                          Sin firma registrada
-                        </span>
-                      </div>
-                      <Button variant="outline" size="sm">
-                        Capturar firma
-                      </Button>
-                    </div>
-                  </div>
-                </TabsContent>
-
-                <TabsContent value="documents" className="space-y-4 mt-4">
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm text-muted-foreground">
-                      {selectedUser.documents.length} documentos
-                    </p>
-                    <Button variant="outline" size="sm">
-                      <Upload className="h-4 w-4 mr-2" />
-                      Subir documento
-                    </Button>
-                  </div>
-
-                  <div className="space-y-2">
-                    {selectedUser.documents.map((doc, index) => (
-                      <div
-                        key={index}
-                        className="flex items-center justify-between p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors"
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="p-2 rounded-lg bg-primary/10">
-                            <FileText className="h-5 w-5 text-primary" />
-                          </div>
-                          <div>
-                            <p className="font-medium text-sm">{doc.name}</p>
-                            <p className="text-xs text-muted-foreground">
-                              {doc.type} • {doc.size}
-                            </p>
-                          </div>
-                        </div>
-                        <Button variant="ghost" size="icon" className="h-8 w-8">
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
-                      </div>
-                    ))}
+                    <Label className="text-muted-foreground mb-2 block">Estado</Label>
+                    <Badge variant={selectedUser.isActive ? "success" : "secondary"}>
+                      {selectedUser.isActive ? "Activo" : "Inactivo"}
+                    </Badge>
                   </div>
                 </TabsContent>
 
                 <TabsContent value="assets" className="space-y-4 mt-4">
                   <p className="text-sm text-muted-foreground">
-                    {selectedUser.assetCount} activos asignados
+                    {selectedUser._count.assignments} activos asignados actualmente
                   </p>
-
-                  {selectedUser.assetCount > 0 ? (
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
-                        <div className="flex items-center gap-3">
-                          <div className="p-2 rounded-lg bg-primary/10">
-                            <Package className="h-5 w-5 text-primary" />
-                          </div>
-                          <div>
-                            <p className="font-medium text-sm">
-                              Laptop Dell XPS 15
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              ACT-0042 • Asignado: 10/01/2024
-                            </p>
-                          </div>
-                        </div>
-                        <Button variant="outline" size="sm">
-                          Ver
-                        </Button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="text-center py-8 text-muted-foreground">
-                      <Package className="h-12 w-12 mx-auto mb-2 opacity-30" />
-                      <p>No tiene activos asignados</p>
-                    </div>
-                  )}
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Package className="h-12 w-12 mx-auto mb-2 opacity-30" />
+                    <p>El detalle de activos se mostrara en una siguiente iteracion</p>
+                  </div>
                 </TabsContent>
               </Tabs>
 
               <DialogFooter className="mt-4">
-                <Button variant="outline" asChild>
-                  <a href="#">📄 Exportar PDF</a>
-                </Button>
                 <Button>
                   <Edit className="h-4 w-4 mr-2" />
                   Editar usuario
@@ -589,7 +557,6 @@ export default function UsuariosPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Stats */}
       <div className="grid gap-4 md:grid-cols-4">
         <Card>
           <CardContent className="p-6">
@@ -611,9 +578,7 @@ export default function UsuariosPage() {
                 <Users className="h-6 w-6 text-emerald-500" />
               </div>
               <div>
-                <p className="text-2xl font-bold">
-                  {users.filter((u) => u.isActive).length}
-                </p>
+                <p className="text-2xl font-bold">{users.filter((user) => user.isActive).length}</p>
                 <p className="text-sm text-muted-foreground">Activos</p>
               </div>
             </div>
@@ -627,11 +592,9 @@ export default function UsuariosPage() {
               </div>
               <div>
                 <p className="text-2xl font-bold">
-                  {users.reduce((acc, u) => acc + u.assetCount, 0)}
+                  {users.reduce((acc, user) => acc + user._count.assignments, 0)}
                 </p>
-                <p className="text-sm text-muted-foreground">
-                  Activos asignados
-                </p>
+                <p className="text-sm text-muted-foreground">Activos asignados</p>
               </div>
             </div>
           </CardContent>
@@ -644,7 +607,7 @@ export default function UsuariosPage() {
               </div>
               <div>
                 <p className="text-2xl font-bold">
-                  {users.reduce((acc, u) => acc + u.documents.length, 0)}
+                  {users.reduce((acc, user) => acc + user._count.documents, 0)}
                 </p>
                 <p className="text-sm text-muted-foreground">Documentos</p>
               </div>

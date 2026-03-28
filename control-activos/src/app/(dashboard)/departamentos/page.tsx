@@ -15,8 +15,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -28,6 +27,9 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Loading } from "@/components/ui/loading";
+import { useFetch } from "@/lib/hooks/use-fetch";
+import toast from "react-hot-toast";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -39,66 +41,14 @@ import {
 interface Department {
   id: string;
   name: string;
-  description: string;
-  location: string;
-  manager: string;
-  employeeCount: number;
+  description: string | null;
+  location: string | null;
+  _count: {
+    users: number;
+  };
   assetCount: number;
   assetValue: number;
 }
-
-const departments: Department[] = [
-  {
-    id: "1",
-    name: "Tecnología",
-    description: "Desarrollo e infraestructura TI",
-    location: "Edificio A, Piso 3",
-    manager: "María López",
-    employeeCount: 12,
-    assetCount: 48,
-    assetValue: 890000,
-  },
-  {
-    id: "2",
-    name: "Operaciones",
-    description: "Producción y logística",
-    location: "Edificio B, Piso 1",
-    manager: "Carlos Mendoza",
-    employeeCount: 25,
-    assetCount: 35,
-    assetValue: 520000,
-  },
-  {
-    id: "3",
-    name: "Ventas",
-    description: "Equipo comercial",
-    location: "Edificio A, Piso 2",
-    manager: "Pedro Ruiz",
-    employeeCount: 18,
-    assetCount: 28,
-    assetValue: 380000,
-  },
-  {
-    id: "4",
-    name: "Administración",
-    description: "Finanzas, RRHH y legal",
-    location: "Edificio A, Piso 1",
-    manager: "Ana Torres",
-    employeeCount: 10,
-    assetCount: 22,
-    assetValue: 350000,
-  },
-  {
-    id: "5",
-    name: "Marketing",
-    description: "Publicidad y comunicación",
-    location: "Edificio A, Piso 2",
-    manager: "Luis García",
-    employeeCount: 8,
-    assetCount: 15,
-    assetValue: 310000,
-  },
-];
 
 const formatCurrency = (value: number) => {
   return new Intl.NumberFormat("es-MX", {
@@ -109,7 +59,54 @@ const formatCurrency = (value: number) => {
 };
 
 export default function DepartamentosPage() {
+  const {
+    data: departments,
+    loading,
+    refetch,
+  } = useFetch<Department[]>("/api/departamentos", []);
+
   const [dialogOpen, setDialogOpen] = React.useState(false);
+  const [submitting, setSubmitting] = React.useState(false);
+  const [formData, setFormData] = React.useState({
+    name: "",
+    description: "",
+    location: "",
+  });
+
+  const handleCreateDepartment = async () => {
+    if (!formData.name.trim()) {
+      toast.error("El nombre del departamento es requerido");
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const response = await fetch("/api/departamentos", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(formData),
+      });
+
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        toast.error(body?.error ?? "No fue posible crear el departamento");
+        return;
+      }
+
+      toast.success("Departamento creado correctamente");
+      setDialogOpen(false);
+      setFormData({ name: "", description: "", location: "" });
+      refetch();
+    } catch {
+      toast.error("No fue posible crear el departamento");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (loading) {
+    return <Loading text="Cargando departamentos..." />;
+  }
 
   return (
     <motion.div
@@ -142,7 +139,14 @@ export default function DepartamentosPage() {
             <div className="grid gap-4 py-4">
               <div className="space-y-2">
                 <Label htmlFor="name">Nombre *</Label>
-                <Input id="name" placeholder="Ej: Tecnología" />
+                <Input
+                  id="name"
+                  placeholder="Ej: Tecnología"
+                  value={formData.name}
+                  onChange={(event) =>
+                    setFormData((prev) => ({ ...prev, name: event.target.value }))
+                  }
+                />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="description">Descripción</Label>
@@ -150,22 +154,34 @@ export default function DepartamentosPage() {
                   id="description"
                   placeholder="Descripción del departamento..."
                   rows={2}
+                  value={formData.description}
+                  onChange={(event) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      description: event.target.value,
+                    }))
+                  }
                 />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="location">Ubicación</Label>
-                <Input id="location" placeholder="Ej: Edificio A, Piso 3" />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="manager">Responsable</Label>
-                <Input id="manager" placeholder="Nombre del responsable" />
+                <Input
+                  id="location"
+                  placeholder="Ej: Edificio A, Piso 3"
+                  value={formData.location}
+                  onChange={(event) =>
+                    setFormData((prev) => ({ ...prev, location: event.target.value }))
+                  }
+                />
               </div>
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setDialogOpen(false)}>
                 Cancelar
               </Button>
-              <Button onClick={() => setDialogOpen(false)}>Guardar</Button>
+              <Button onClick={handleCreateDepartment} disabled={submitting}>
+                {submitting ? "Guardando..." : "Guardar"}
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -226,17 +242,13 @@ export default function DepartamentosPage() {
                 <div className="space-y-3 text-sm">
                   <div className="flex items-center gap-2 text-muted-foreground">
                     <MapPin className="h-4 w-4" />
-                    <span>{dept.location}</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-muted-foreground">
-                    <Users className="h-4 w-4" />
-                    <span>Responsable: {dept.manager}</span>
+                    <span>{dept.location || "Sin ubicación"}</span>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-3 gap-4 mt-4 pt-4 border-t">
                   <div className="text-center">
-                    <p className="text-2xl font-bold">{dept.employeeCount}</p>
+                    <p className="text-2xl font-bold">{dept._count.users}</p>
                     <p className="text-xs text-muted-foreground">Empleados</p>
                   </div>
                   <div className="text-center">
@@ -284,7 +296,7 @@ export default function DepartamentosPage() {
               </div>
               <div>
                 <p className="text-2xl font-bold">
-                  {departments.reduce((acc, d) => acc + d.employeeCount, 0)}
+                  {departments.reduce((acc, d) => acc + d._count.users, 0)}
                 </p>
                 <p className="text-sm text-muted-foreground">Empleados</p>
               </div>

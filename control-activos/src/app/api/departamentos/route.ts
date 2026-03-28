@@ -10,47 +10,53 @@ const createDepartmentSchema = z.object({
 
 export async function GET() {
   try {
-    const departments = await prisma.department.findMany({
-      include: {
-        _count: {
-          select: {
-            users: true,
-            assignments: true,
-          },
-        },
-      },
-      orderBy: { name: "asc" },
-    });
-
-    // Calcular valor total de activos por departamento
-    const departmentsWithValue = await Promise.all(
-      departments.map(async (dept) => {
-        const assignments = await prisma.assignment.findMany({
-          where: {
-            departmentId: dept.id,
-            status: "ACTIVE",
-          },
-          include: {
-            asset: {
-              select: {
-                currentValue: true,
-              },
+    const [departments, activeAssignments] = await Promise.all([
+      prisma.department.findMany({
+        include: {
+          _count: {
+            select: {
+              users: true,
+              assignments: true,
             },
           },
-        });
+        },
+        orderBy: { name: "asc" },
+      }),
+      prisma.assignment.findMany({
+        where: {
+          status: "ACTIVE",
+          departmentId: { not: null },
+        },
+        select: {
+          departmentId: true,
+          asset: {
+            select: {
+              currentValue: true,
+            },
+          },
+        },
+      }),
+    ]);
 
-        const assetValue = assignments.reduce(
-          (sum, a) => sum + (a.asset.currentValue || 0),
-          0
-        );
+    const statsByDepartmentId = activeAssignments.reduce<
+      Record<string, { assetCount: number; assetValue: number }>
+    >((acc, assignment) => {
+      if (!assignment.departmentId) {
+        return acc;
+      }
 
-        return {
-          ...dept,
-          assetCount: assignments.length,
-          assetValue,
-        };
-      })
-    );
+      const current = acc[assignment.departmentId] || { assetCount: 0, assetValue: 0 };
+      current.assetCount += 1;
+      current.assetValue += assignment.asset.currentValue || 0;
+      acc[assignment.departmentId] = current;
+      return acc;
+    }, {});
+
+    const departmentsWithValue = departments.map((department) => ({
+      ...department,
+      assetCount: statsByDepartmentId[department.id]?.assetCount || 0,
+      assetValue: statsByDepartmentId[department.id]?.assetValue || 0,
+    }));
 
     return NextResponse.json(departmentsWithValue);
   } catch (error) {

@@ -4,6 +4,7 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Package, Eye, EyeOff, Loader2 } from "lucide-react";
+import { signIn } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -22,15 +23,26 @@ export default function LoginPage() {
     setError("");
     setIsLoading(true);
 
-    // Simulación de login
-    setTimeout(() => {
-      if (email && password) {
-        router.push("/");
-      } else {
-        setError("Por favor ingresa tus credenciales");
+    try {
+      const response = await signIn("credentials", {
+        email,
+        password,
+        redirect: false,
+      });
+
+      if (response?.error) {
+        setError("Credenciales invalidas o usuario inactivo");
+        return;
       }
+
+      router.push("/");
+      router.refresh();
+    } catch (err) {
+      console.error("Error during login:", err);
+      setError("No fue posible iniciar sesion");
+    } finally {
       setIsLoading(false);
-    }, 1000);
+    }
   };
 
   return (

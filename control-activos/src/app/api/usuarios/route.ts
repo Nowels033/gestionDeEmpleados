@@ -42,7 +42,11 @@ export async function GET() {
     });
 
     // No enviar contraseñas
-    const usersWithoutPassword = users.map(({ password, ...user }) => user);
+    const usersWithoutPassword = users.map((user) => {
+      const { password: removedPassword, ...safeUser } = user;
+      void removedPassword;
+      return safeUser;
+    });
 
     return NextResponse.json(usersWithoutPassword);
   } catch (error) {
@@ -78,7 +82,8 @@ export async function POST(request: Request) {
       },
     });
 
-    const { password, ...userWithoutPassword } = user;
+    const { password: removedPassword, ...userWithoutPassword } = user;
+    void removedPassword;
     return NextResponse.json(userWithoutPassword, { status: 201 });
   } catch (error) {
     if (error instanceof z.ZodError) {

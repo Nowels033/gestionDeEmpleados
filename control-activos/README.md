@@ -23,6 +23,19 @@ Copia `.env.example` a `.env` y completa los valores:
 cp .env.example .env
 ```
 
+Si usas Supabase, usa:
+
+- `DATABASE_URL` con `pooler` (puerto 6543)
+- `DIRECT_URL` con `session pooler` (mismo host `pooler`, puerto 5432)
+
+Prisma usa `DIRECT_URL` para operaciones de schema (`db push`, migraciones) y evita bloqueos del transaction pooler.
+
+Para generar `NEXTAUTH_SECRET` puedes usar:
+
+```bash
+openssl rand -base64 32
+```
+
 ## Comandos
 
 ```bash
@@ -31,6 +44,11 @@ npm run db:push
 npm run db:seed
 npm run dev
 ```
+
+Usuario demo (despues de seed):
+
+- email: `admin@empresa.com`
+- password: `admin12345`
 
 Comandos de calidad:
 
@@ -45,6 +63,15 @@ npm run build
 - API con validacion de entrada en endpoints principales (Zod).
 - Hash de contrasena con bcrypt en creacion de usuarios.
 - Asignaciones con transaccion para mantener consistencia de datos.
+- Autenticacion real con NextAuth (Credentials + JWT).
+- Middleware para proteger rutas privadas y APIs.
+
+## Configuracion gratuita recomendada
+
+- Frontend: Vercel Hobby (free).
+- Base de datos: Supabase o Neon (free tier).
+- Dominio: usar subdominio gratis de Vercel al inicio.
+- Monitoreo inicial: logs de plataforma (sin costo).
 
 ## Roadmap corto
 

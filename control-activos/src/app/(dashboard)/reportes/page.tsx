@@ -3,7 +3,6 @@
 import * as React from "react";
 import { motion } from "framer-motion";
 import {
-  FileDown,
   FileText,
   Package,
   Users,
@@ -14,8 +13,9 @@ import {
   Download,
   Eye,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
 interface Report {
@@ -23,7 +23,7 @@ interface Report {
   name: string;
   description: string;
   category: string;
-  icon: any;
+  icon: LucideIcon;
   formats: string[];
 }
 
