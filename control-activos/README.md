@@ -1,4 +1,4 @@
-# Control de Activos
+# AssetOne
 
 Sistema web para gestion de activos empresariales, asignaciones, usuarios, departamentos y reportes.
 

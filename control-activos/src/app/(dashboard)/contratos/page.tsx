@@ -109,7 +109,7 @@ export default function ContratosPage() {
   const FILTERS_STORAGE_KEY = "contratos.filters.v1";
 
   const { data: contracts, loading, refetch } = useFetch<Contract[]>("/api/contratos", []);
-  const { data: assets } = useFetch<AssetOption[]>("/api/activos", []);
+  const { data: assets } = useFetch<AssetOption[]>("/api/activos?view=options", []);
   const { data: departments } = useFetch<DepartmentOption[]>("/api/departamentos?view=options", []);
 
   const [dialogOpen, setDialogOpen] = React.useState(false);

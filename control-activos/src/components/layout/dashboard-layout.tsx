@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { signOut } from "next-auth/react";
@@ -26,6 +27,7 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { useTheme } from "next-themes";
+import { BRAND_LOGO_PATH, BRAND_NAME } from "@/lib/brand";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -72,6 +74,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const [searchOpen, setSearchOpen] = React.useState(false);
   const [searchQuery, setSearchQuery] = React.useState("");
   const [activeSearchIndex, setActiveSearchIndex] = React.useState(0);
+  const [logoLoadError, setLogoLoadError] = React.useState(false);
   const prefersReducedMotion = useReducedMotion();
 
   const currentSection = React.useMemo(() => {
@@ -150,7 +153,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   }, [filteredNavItems]);
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background soft-grid">
       <a
         href="#main-content"
         className="sr-only fixed left-4 top-4 z-[90] rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground focus:not-sr-only"
@@ -165,7 +168,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             initial={prefersReducedMotion ? { opacity: 1 } : { opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={prefersReducedMotion ? { opacity: 1 } : { opacity: 0 }}
-            className="fixed inset-0 z-40 bg-black/35 backdrop-blur-sm lg:hidden"
+            className="fixed inset-0 z-40 bg-black/45 backdrop-blur-sm lg:hidden"
             onClick={() => setSidebarOpen(false)}
           />
         )}
@@ -174,19 +177,34 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       {/* Sidebar */}
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-50 w-72 bg-sidebar/95 border-r border-border/70 backdrop-blur-md transform transition-transform duration-300 ease-in-out motion-reduce:transition-none lg:translate-x-0",
+          "fixed inset-y-0 left-0 z-50 w-72 bg-sidebar/88 border-r border-border/70 backdrop-blur-xl transform transition-transform duration-300 ease-in-out motion-reduce:transition-none lg:translate-x-0",
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
         <div className="flex flex-col h-full">
           {/* Logo */}
-          <div className="flex items-center justify-between h-16 px-6 border-b border-border/70">
-            <Link href="/" className="flex items-center gap-3">
+          <div className="flex items-center justify-between h-16 px-6 border-b border-border/70 bg-gradient-to-r from-background/65 to-primary/10">
+            <Link href="/" className="flex items-center gap-3 min-w-0">
+              {logoLoadError ? (
                 <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-primary text-primary-foreground font-bold text-lg shadow-md shadow-primary/30">
-                  CA
+                  AO
                 </div>
+              ) : (
+                <div className="h-10 w-10 shrink-0 overflow-hidden rounded-xl border border-border/70 bg-background shadow-md shadow-primary/20">
+                  <Image
+                    src={BRAND_LOGO_PATH}
+                    alt={`Logo ${BRAND_NAME}`}
+                    width={40}
+                    height={40}
+                    unoptimized
+                    priority
+                    className="h-10 w-10 object-contain"
+                    onError={() => setLogoLoadError(true)}
+                  />
+                </div>
+              )}
               <div className="flex flex-col">
-                <span className="font-semibold text-sm">Control de Activos</span>
+                <span className="font-semibold text-sm tracking-tight">{BRAND_NAME}</span>
                 <span className="text-xs text-muted-foreground">v1.0.0</span>
               </div>
             </Link>
@@ -213,8 +231,8 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                   className={cn(
                     "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200",
                     isActive
-                      ? "bg-primary text-primary-foreground shadow-md shadow-primary/30"
-                      : "text-muted-foreground hover:bg-accent/70 hover:text-accent-foreground"
+                      ? "bg-gradient-to-r from-primary to-cyan-500 text-primary-foreground shadow-md shadow-primary/30"
+                      : "text-muted-foreground hover:bg-accent/75 hover:text-accent-foreground"
                   )}
                 >
                   <item.icon className="h-5 w-5" />
@@ -236,7 +254,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
               className={cn(
                 "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200",
                 pathname === "/configuracion"
-                  ? "bg-primary text-primary-foreground shadow-md"
+                  ? "bg-gradient-to-r from-primary to-cyan-500 text-primary-foreground shadow-md"
                   : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
               )}
             >
@@ -250,7 +268,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       {/* Main content */}
       <div className="lg:pl-72">
         {/* Top navbar */}
-        <header className="sticky top-0 z-30 flex items-center justify-between h-16 px-4 lg:px-8 bg-background/70 backdrop-blur-md border-b border-border/70">
+        <header className="sticky top-0 z-30 flex items-center justify-between h-16 px-4 lg:px-8 bg-background/70 backdrop-blur-xl border-b border-border/60">
           <div className="flex items-center gap-4">
             <Button
               variant="ghost"
@@ -265,7 +283,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             {/* Search bar */}
             <button
               type="button"
-              className="hidden sm:flex items-center gap-2 px-4 py-2 rounded-lg bg-muted/60 text-muted-foreground text-sm w-64 text-left transition-colors hover:bg-muted"
+              className="hidden sm:flex items-center gap-2 px-4 py-2 rounded-xl border border-border/70 bg-background/80 text-muted-foreground text-sm w-64 text-left transition-colors hover:bg-muted/70"
               onClick={() => setSearchOpen(true)}
               aria-haspopup="dialog"
               aria-expanded={searchOpen}
@@ -273,7 +291,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             >
               <Search className="h-4 w-4" />
               <span className="flex-1">Buscar modulo...</span>
-              <kbd className="pointer-events-none inline-flex h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground">
+                <kbd className="pointer-events-none inline-flex h-5 select-none items-center gap-1 rounded border border-border/70 bg-muted/70 px-1.5 font-mono text-[10px] font-medium text-muted-foreground">
                 <span className="text-xs">⌘</span>K
               </kbd>
             </button>

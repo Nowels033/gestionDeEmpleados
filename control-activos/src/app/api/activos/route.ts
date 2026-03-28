@@ -21,12 +21,38 @@ const createAssetSchema = z.object({
 
 const LIST_CACHE_CONTROL = "private, max-age=20, stale-while-revalidate=120";
 
-export async function GET() {
+export async function GET(request: Request) {
   const startedAt = performance.now();
   try {
     const { error } = await requireAuthenticated();
     if (error) {
       return error;
+    }
+
+    const { searchParams } = new URL(request.url);
+    const view = searchParams.get("view");
+
+    if (view === "options") {
+      const optionAssets = await prisma.asset.findMany({
+        select: {
+          id: true,
+          name: true,
+          status: true,
+        },
+        orderBy: { name: "asc" },
+      });
+
+      const durationMs = performance.now() - startedAt;
+      if (process.env.NODE_ENV !== "production") {
+        console.info(`[api] GET /api/activos?view=options ${durationMs.toFixed(1)}ms rows=${optionAssets.length}`);
+      }
+
+      return NextResponse.json(optionAssets, {
+        headers: {
+          "Cache-Control": LIST_CACHE_CONTROL,
+          "Server-Timing": `total;dur=${durationMs.toFixed(1)}`,
+        },
+      });
     }
 
     const assets = await prisma.asset.findMany({

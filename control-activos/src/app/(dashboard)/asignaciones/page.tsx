@@ -114,7 +114,7 @@ export default function AsignacionesPage() {
     loading,
     refetch,
   } = useFetch<Assignment[]>("/api/asignaciones", []);
-  const { data: assets } = useFetch<AssetOption[]>("/api/activos", []);
+  const { data: assets } = useFetch<AssetOption[]>("/api/activos?view=options", []);
   const { data: users } = useFetch<UserOption[]>("/api/usuarios?view=options", []);
   const { data: departments } = useFetch<DepartmentOption[]>("/api/departamentos?view=options", []);
 

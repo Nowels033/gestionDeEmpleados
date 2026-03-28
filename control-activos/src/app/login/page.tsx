@@ -1,14 +1,20 @@
 "use client";
 
 import * as React from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { Package, Eye, EyeOff, Loader2 } from "lucide-react";
+import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { signIn } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import {
+  BRAND_LOGO_PATH,
+  BRAND_NAME,
+  BRAND_TAGLINE,
+} from "@/lib/brand";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -17,6 +23,7 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = React.useState(false);
   const [isLoading, setIsLoading] = React.useState(false);
   const [error, setError] = React.useState("");
+  const [logoLoadError, setLogoLoadError] = React.useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -46,7 +53,9 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background via-background to-muted p-4">
+    <div className="relative min-h-screen overflow-hidden p-4">
+      <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(circle_at_15%_10%,hsl(var(--primary)/0.18),transparent_30%),radial-gradient(circle_at_85%_15%,hsl(174_74%_36%/0.14),transparent_30%)]" />
+      <div className="flex min-h-screen items-center justify-center">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -56,22 +65,40 @@ export default function LoginPage() {
         {/* Logo */}
         <div className="flex flex-col items-center mb-8">
           <motion.div
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
-            transition={{ delay: 0.2, type: "spring", stiffness: 200 }}
-            className="flex items-center justify-center w-16 h-16 rounded-2xl bg-primary text-primary-foreground mb-4"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.15, duration: 0.35 }}
+            className="mb-4"
           >
-            <Package className="h-8 w-8" />
+            {logoLoadError ? (
+              <div className="flex items-center justify-center w-24 h-24 rounded-2xl bg-primary text-primary-foreground text-xl font-bold">
+                AO
+              </div>
+            ) : (
+              <div className="h-28 w-28 overflow-hidden rounded-2xl border border-border/70 bg-background/90 shadow-lg shadow-primary/30">
+                <Image
+                  src={BRAND_LOGO_PATH}
+                  alt={`Logo ${BRAND_NAME}`}
+                  width={112}
+                  height={112}
+                  unoptimized
+                  priority
+                  className="h-28 w-28 object-cover"
+                  style={{ objectPosition: "50% 35%" }}
+                  onError={() => setLogoLoadError(true)}
+                />
+              </div>
+            )}
           </motion.div>
-          <h1 className="text-2xl font-bold">Control de Activos</h1>
+          <h1 className="text-3xl font-extrabold tracking-tight">{BRAND_NAME}</h1>
           <p className="text-muted-foreground text-sm mt-1">
-            Sistema de gestión empresarial
+            {BRAND_TAGLINE}
           </p>
         </div>
 
-        <Card className="border-2 shadow-xl">
+        <Card className="glass-panel border border-border/70 shadow-2xl shadow-primary/10">
           <CardHeader className="space-y-1 text-center">
-            <CardTitle className="text-xl">Iniciar Sesión</CardTitle>
+            <CardTitle className="text-2xl">Iniciar Sesión</CardTitle>
             <CardDescription>
               Ingresa tus credenciales para acceder
             </CardDescription>
@@ -161,9 +188,10 @@ export default function LoginPage() {
         </Card>
 
         <p className="text-center text-sm text-muted-foreground mt-6">
-          © 2026 Control de Activos. Todos los derechos reservados.
+          © 2026 {BRAND_NAME}. Todos los derechos reservados.
         </p>
       </motion.div>
+      </div>
     </div>
   );
 }

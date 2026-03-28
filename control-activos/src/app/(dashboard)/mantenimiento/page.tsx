@@ -102,7 +102,7 @@ export default function MantenimientoPage() {
     "/api/mantenimientos",
     []
   );
-  const { data: assets } = useFetch<AssetOption[]>("/api/activos", []);
+  const { data: assets } = useFetch<AssetOption[]>("/api/activos?view=options", []);
   const { data: users } = useFetch<UserOption[]>("/api/usuarios?view=options", []);
 
   const [dialogOpen, setDialogOpen] = React.useState(false);

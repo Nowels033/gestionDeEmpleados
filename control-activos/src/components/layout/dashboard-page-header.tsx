@@ -19,7 +19,7 @@ export function DashboardPageHeader({
   return (
     <div
       className={cn(
-        "rounded-xl border border-border/70 bg-gradient-to-r from-background via-background to-primary/5 p-4 md:p-5",
+        "rounded-2xl border border-border/70 bg-gradient-to-r from-background/95 via-background/90 to-primary/10 p-4 shadow-sm md:p-5",
         className
       )}
     >
