@@ -92,6 +92,25 @@ export async function PATCH(
       );
     }
 
+    if (body.isActive === false && previousUser.isActive) {
+      const activeAssignmentsCount = await prisma.assignment.count({
+        where: {
+          userId: id,
+          status: "ACTIVE",
+        },
+      });
+
+      if (activeAssignmentsCount > 0) {
+        return NextResponse.json(
+          {
+            error:
+              "No se puede desactivar el usuario porque tiene asignaciones activas. Devuelvelas o transfierelas primero.",
+          },
+          { status: 409 }
+        );
+      }
+    }
+
     const data: Record<string, unknown> = { ...body };
     if (body.password) {
       data.password = await bcrypt.hash(body.password, 12);

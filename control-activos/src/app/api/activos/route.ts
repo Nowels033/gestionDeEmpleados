@@ -162,6 +162,18 @@ export async function POST(request: Request) {
     const rawBody = await request.json();
     const body = createAssetSchema.parse(rawBody);
 
+    const securityUser = await prisma.user.findUnique({
+      where: { id: body.securityUserId },
+      select: { id: true, isActive: true },
+    });
+
+    if (!securityUser || !securityUser.isActive) {
+      return NextResponse.json(
+        { error: "El responsable de seguridad no existe o esta inactivo" },
+        { status: 400 }
+      );
+    }
+
     const asset = await prisma.asset.create({
       data: {
         name: body.name,

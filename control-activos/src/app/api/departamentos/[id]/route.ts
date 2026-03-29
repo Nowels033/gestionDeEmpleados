@@ -40,6 +40,25 @@ export async function PATCH(
       return NextResponse.json({ error: "Departamento no encontrado" }, { status: 404 });
     }
 
+    if (body.isActive === false && previousDepartment.isActive) {
+      const activeAssignmentsCount = await prisma.assignment.count({
+        where: {
+          departmentId: id,
+          status: "ACTIVE",
+        },
+      });
+
+      if (activeAssignmentsCount > 0) {
+        return NextResponse.json(
+          {
+            error:
+              "No se puede desactivar el departamento porque tiene asignaciones activas. Transferelas o devuelvelas primero.",
+          },
+          { status: 409 }
+        );
+      }
+    }
+
     const department = await prisma.department.update({
       where: { id },
       data: body,

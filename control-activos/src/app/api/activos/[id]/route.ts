@@ -52,6 +52,20 @@ export async function PATCH(
       return NextResponse.json({ error: "Activo no encontrado" }, { status: 404 });
     }
 
+    if (body.securityUserId) {
+      const securityUser = await prisma.user.findUnique({
+        where: { id: body.securityUserId },
+        select: { id: true, isActive: true },
+      });
+
+      if (!securityUser || !securityUser.isActive) {
+        return NextResponse.json(
+          { error: "El responsable de seguridad no existe o esta inactivo" },
+          { status: 400 }
+        );
+      }
+    }
+
     if (body.status) {
       const activeAssignmentsCount = await prisma.assignment.count({
         where: {
