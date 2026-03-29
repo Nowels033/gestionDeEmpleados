@@ -23,9 +23,11 @@ import {
   Plus,
   Search,
   Settings,
+  ShieldCheck,
   Sun,
   UserPlus,
   Users,
+  Upload,
   Wrench,
   X,
 } from "lucide-react";
@@ -66,6 +68,7 @@ const navItems = [
   { href: "/asignaciones", label: "Asignaciones", icon: ArrowLeftRight },
   { href: "/mantenimiento", label: "Mantenimiento", icon: Wrench },
   { href: "/contratos", label: "Contratos", icon: FileText },
+  { href: "/auditoria", label: "Bitacora", icon: ShieldCheck },
   { href: "/reportes", label: "Reportes PDF", icon: FileDown },
   { href: "/chat", label: "Chat IA", icon: Bot },
 ];
@@ -210,6 +213,16 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         href: "/activos",
         command: "export-assets",
         keywords: "exportar csv activos descargar",
+      },
+      {
+        id: "action-import-assets",
+        label: "Importar activos CSV",
+        description: "Carga masiva de activos con validacion",
+        icon: Upload,
+        group: "Accion",
+        href: "/activos",
+        command: "import-assets",
+        keywords: "importar csv activos carga masiva",
       },
       {
         id: "action-toggle-theme",

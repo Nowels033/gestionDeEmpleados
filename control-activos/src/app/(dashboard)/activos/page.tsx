@@ -16,6 +16,7 @@ import {
   Edit,
   Trash2,
   FileDown,
+  Upload,
   QrCode,
   Columns3,
   Save,
@@ -108,6 +109,38 @@ interface User {
   id: string;
   name: string;
   lastName: string;
+}
+
+interface AssetImportPreviewRow {
+  rowNumber: number;
+  valid: boolean;
+  errors: string[];
+  fields: {
+    name: string;
+    category: string;
+    securityEmail: string;
+    status: string;
+    ensLevel: string;
+    brand: string;
+    model: string;
+    serialNumber: string;
+    qrCode: string;
+    location: string;
+    purchasePrice: string;
+    currentValue: string;
+    purchaseDate: string;
+    description: string;
+  };
+}
+
+interface AssetImportPreviewResponse {
+  summary: {
+    totalRows: number;
+    validRows: number;
+    invalidRows: number;
+    canImport: boolean;
+  };
+  rows: AssetImportPreviewRow[];
 }
 
 const statusConfig: Record<
@@ -289,6 +322,12 @@ export default function ActivosPage() {
   const [savedViews, setSavedViews] = React.useState<SavedAssetView[]>([]);
   const [selectedSavedView, setSelectedSavedView] = React.useState("none");
   const [saveViewDialogOpen, setSaveViewDialogOpen] = React.useState(false);
+  const [importDialogOpen, setImportDialogOpen] = React.useState(false);
+  const [importFile, setImportFile] = React.useState<File | null>(null);
+  const [importCsvContent, setImportCsvContent] = React.useState("");
+  const [importPreview, setImportPreview] = React.useState<AssetImportPreviewResponse | null>(null);
+  const [previewingImport, setPreviewingImport] = React.useState(false);
+  const [importingFromCsv, setImportingFromCsv] = React.useState(false);
   const [newViewName, setNewViewName] = React.useState("");
   const [currentPage, setCurrentPage] = React.useState(1);
   const ITEMS_PER_PAGE = 24;
@@ -892,6 +931,111 @@ export default function ActivosPage() {
   const handleExportCsvRef = React.useRef(handleExportCsv);
   handleExportCsvRef.current = handleExportCsv;
 
+  const handleDownloadImportTemplate = () => {
+    const template = [
+      "nombre,categoria,responsable_email,estado,nivel_ens,marca,modelo,serial,codigo_qr,ubicacion,descripcion,precio_compra,valor_actual,fecha_compra",
+      "Laptop Dell XPS 15,Laptops,admin@empresa.com,AVAILABLE,BASIC,Dell,XPS 15,DLXPS-0001,QR-DLXPS-0001,Oficina central,Equipo de pruebas,2400,2200,2026-01-15",
+    ].join("\n");
+
+    const blob = new Blob([template], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "plantilla-importacion-activos.csv";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleGenerateImportPreview = async () => {
+    if (!importFile) {
+      toast.error("Selecciona un archivo CSV");
+      return;
+    }
+
+    if (!importFile.name.toLowerCase().endsWith(".csv")) {
+      toast.error("El archivo debe ser .csv");
+      return;
+    }
+
+    try {
+      setPreviewingImport(true);
+      const csvContent = await importFile.text();
+
+      const response = await fetch("/api/activos/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          csvContent,
+          commit: false,
+        }),
+      });
+
+      const body = await response.json().catch(() => null);
+      if (!response.ok || !body) {
+        toast.error(body?.error ?? "No fue posible validar el archivo");
+        return;
+      }
+
+      setImportCsvContent(csvContent);
+      setImportPreview(body as AssetImportPreviewResponse);
+
+      if (body.summary.invalidRows > 0) {
+        toast("Se detectaron filas con errores");
+      } else {
+        toast.success("Archivo validado correctamente");
+      }
+    } catch {
+      toast.error("No fue posible validar el archivo");
+    } finally {
+      setPreviewingImport(false);
+    }
+  };
+
+  const handleImportAssetsFromCsv = async () => {
+    if (!importPreview) {
+      toast.error("Primero valida el archivo");
+      return;
+    }
+
+    if (!importPreview.summary.canImport) {
+      toast.error("Corrige los errores antes de importar");
+      return;
+    }
+
+    try {
+      setImportingFromCsv(true);
+
+      const response = await fetch("/api/activos/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          csvContent: importCsvContent,
+          commit: true,
+        }),
+      });
+
+      const body = await response.json().catch(() => null);
+      if (!response.ok || !body) {
+        setImportPreview((body as AssetImportPreviewResponse) || importPreview);
+        toast.error(body?.error ?? "No fue posible importar el archivo");
+        return;
+      }
+
+      toast.success(`Importacion completada: ${body.createdCount} activos`);
+      setImportDialogOpen(false);
+      setImportFile(null);
+      setImportCsvContent("");
+      setImportPreview(null);
+      refetchAssets();
+    } catch {
+      toast.error("No fue posible importar el archivo");
+    } finally {
+      setImportingFromCsv(false);
+    }
+  };
+
   const handleExportSingleAssetCsv = (asset: Asset) => {
     downloadCsv(
       [asset],
@@ -1112,6 +1256,10 @@ export default function ActivosPage() {
 
       if (command === "export-assets") {
         handleExportCsvRef.current();
+      }
+
+      if (command === "import-assets") {
+        setImportDialogOpen(true);
       }
     };
 
@@ -1395,6 +1543,10 @@ export default function ActivosPage() {
           <Button variant="outline" size="sm" onClick={handleExportCsv}>
             <FileDown className="h-4 w-4 mr-2" />
             Exportar
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => setImportDialogOpen(true)}>
+            <Upload className="h-4 w-4 mr-2" />
+            Importar CSV
           </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -2341,6 +2493,147 @@ export default function ActivosPage() {
             <Button onClick={handleSaveCurrentView}>
               <Save className="h-4 w-4 mr-2" />
               Guardar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={importDialogOpen}
+        onOpenChange={(open) => {
+          setImportDialogOpen(open);
+
+          if (!open) {
+            setImportFile(null);
+            setImportCsvContent("");
+            setImportPreview(null);
+            setPreviewingImport(false);
+            setImportingFromCsv(false);
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-[860px] max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Importacion masiva de activos (CSV)</DialogTitle>
+            <DialogDescription>
+              Valida el archivo antes de confirmar. Solo se importan filas sin errores.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card p-4">
+              <div>
+                <p className="text-sm font-medium text-foreground">Plantilla recomendada</p>
+                <p className="text-xs text-muted-foreground">
+                  Columnas base: nombre, categoria, responsable_email, estado, nivel_ens.
+                </p>
+              </div>
+              <Button variant="outline" size="sm" onClick={handleDownloadImportTemplate}>
+                <FileDown className="mr-2 h-4 w-4" />
+                Descargar plantilla
+              </Button>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <Input
+                type="file"
+                accept=".csv"
+                className="max-w-[360px]"
+                onChange={(event) => {
+                  const nextFile = event.target.files?.[0] || null;
+                  setImportFile(nextFile);
+                  setImportCsvContent("");
+                  setImportPreview(null);
+                }}
+              />
+              <Button
+                variant="outline"
+                onClick={handleGenerateImportPreview}
+                disabled={!importFile || previewingImport}
+              >
+                {previewingImport ? "Validando..." : "Validar archivo"}
+              </Button>
+            </div>
+
+            {importPreview ? (
+              <div className="space-y-3">
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <div className="rounded-lg border border-border bg-card p-3">
+                    <p className="text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
+                      Filas totales
+                    </p>
+                    <p className="mt-1 text-xl font-semibold text-foreground">
+                      {importPreview.summary.totalRows}
+                    </p>
+                  </div>
+                  <div className="rounded-lg border border-border bg-card p-3">
+                    <p className="text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
+                      Filas validas
+                    </p>
+                    <p className="mt-1 text-xl font-semibold text-emerald-400">
+                      {importPreview.summary.validRows}
+                    </p>
+                  </div>
+                  <div className="rounded-lg border border-border bg-card p-3">
+                    <p className="text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
+                      Filas con error
+                    </p>
+                    <p className="mt-1 text-xl font-semibold text-rose-400">
+                      {importPreview.summary.invalidRows}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="max-h-72 overflow-auto rounded-lg border border-border scrollbar-thin">
+                  <table className="w-full min-w-[760px] text-sm">
+                    <thead>
+                      <tr className="border-b border-border bg-card/95 text-xs uppercase tracking-[0.08em] text-muted-foreground">
+                        <th className="px-3 py-2 text-left">Fila</th>
+                        <th className="px-3 py-2 text-left">Activo</th>
+                        <th className="px-3 py-2 text-left">Categoria</th>
+                        <th className="px-3 py-2 text-left">Responsable</th>
+                        <th className="px-3 py-2 text-left">Estado</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {importPreview.rows.map((row) => (
+                        <tr key={row.rowNumber} className="border-b border-border/70 align-top">
+                          <td className="px-3 py-2 text-muted-foreground">{row.rowNumber}</td>
+                          <td className="px-3 py-2">
+                            <p className="font-medium text-foreground">{row.fields.name || "-"}</p>
+                            {row.errors.length > 0 ? (
+                              <p className="mt-1 text-xs text-rose-400">{row.errors.join(" • ")}</p>
+                            ) : null}
+                          </td>
+                          <td className="px-3 py-2 text-foreground">{row.fields.category || "-"}</td>
+                          <td className="px-3 py-2 text-foreground">{row.fields.securityEmail || "-"}</td>
+                          <td className="px-3 py-2">
+                            <Badge variant={row.valid ? "success" : "destructive"}>
+                              {row.valid ? "Valida" : "Con errores"}
+                            </Badge>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                Carga un archivo y pulsa &quot;Validar archivo&quot; para ver la vista previa.
+              </p>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setImportDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleImportAssetsFromCsv}
+              disabled={!importPreview?.summary.canImport || importingFromCsv}
+            >
+              {importingFromCsv ? "Importando..." : "Confirmar importacion"}
             </Button>
           </DialogFooter>
         </DialogContent>

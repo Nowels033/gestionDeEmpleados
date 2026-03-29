@@ -4,6 +4,7 @@ const PENDING_COMMAND_KEY = "assetone:pending-command";
 export type AppCommand =
   | "new-asset"
   | "export-assets"
+  | "import-assets"
   | "new-assignment"
   | "new-user"
   | "new-contract";
@@ -11,6 +12,7 @@ export type AppCommand =
 const VALID_COMMANDS: AppCommand[] = [
   "new-asset",
   "export-assets",
+  "import-assets",
   "new-assignment",
   "new-user",
   "new-contract",
