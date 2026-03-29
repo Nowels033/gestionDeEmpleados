@@ -4,6 +4,10 @@ import { prisma } from "@/lib/prisma";
 import { requireRoles } from "@/lib/api-auth";
 import { createAuditLog } from "@/lib/audit-log";
 import { syncAssetStatusFromAssignments } from "@/lib/asset-assignment-sync";
+import {
+  AssignmentTargetError,
+  ensureAssignmentTargetIsValid,
+} from "@/lib/assignment-targets";
 import { z } from "zod";
 
 class AssignmentOperationError extends Error {
@@ -137,6 +141,8 @@ export async function PATCH(
           throw new AssignmentOperationError("El activo ya tiene otra asignacion activa", 409);
         }
 
+        await ensureAssignmentTargetIsValid(tx, nextType, nextUserId, nextDepartmentId);
+
         const previousAssignment = await tx.assignment.update({
           where: { id },
           data: {
@@ -254,6 +260,10 @@ export async function PATCH(
         }
       }
 
+      if (destinationChanged || body.status === "ACTIVE") {
+        await ensureAssignmentTargetIsValid(tx, nextType, nextUserId, nextDepartmentId);
+      }
+
       const data: {
         status?: "ACTIVE" | "RETURNED" | "TRANSFERRED";
         type?: "PERSONAL" | "DEPARTAMENTAL";
@@ -350,6 +360,10 @@ export async function PATCH(
     }
 
     if (error instanceof AssignmentOperationError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+
+    if (error instanceof AssignmentTargetError) {
       return NextResponse.json({ error: error.message }, { status: error.status });
     }
 
