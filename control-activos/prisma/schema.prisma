@@ -361,3 +361,16 @@ model AuditLog {
   @@index([createdAt])
   @@map("audit_logs")
 }
+
+model AppSetting {
+  id              String   @id @default(cuid())
+  scope           String
+  value           Json
+  updatedByUserId String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([scope])
+  @@index([updatedAt])
+  @@map("app_settings")
+}
