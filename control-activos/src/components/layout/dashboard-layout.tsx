@@ -24,6 +24,7 @@ import {
   Search,
   Settings,
   ShieldCheck,
+  Stethoscope,
   Sun,
   UserPlus,
   Users,
@@ -69,6 +70,7 @@ const navItems = [
   { href: "/mantenimiento", label: "Mantenimiento", icon: Wrench },
   { href: "/contratos", label: "Contratos", icon: FileText },
   { href: "/auditoria", label: "Bitacora", icon: ShieldCheck },
+  { href: "/consistencia", label: "Consistencia", icon: Stethoscope },
   { href: "/reportes", label: "Reportes PDF", icon: FileDown },
   { href: "/chat", label: "Chat IA", icon: Bot },
 ];
