@@ -93,7 +93,29 @@ export async function DELETE(
       return NextResponse.json({ error: "Adjunto no encontrado" }, { status: 404 });
     }
 
-    await prisma.assetPhoto.delete({ where: { id: attachmentId } });
+    await prisma.$transaction(async (tx) => {
+      await tx.assetPhoto.delete({ where: { id: attachmentId } });
+
+      if (attachment.isPrimary) {
+        const remainingAttachments = await tx.assetPhoto.findMany({
+          where: { assetId: id },
+          select: { id: true, caption: true, url: true },
+          orderBy: { uploadedAt: "desc" },
+        });
+
+        const nextPrimaryPhoto = remainingAttachments.find(
+          (remainingAttachment) =>
+            getAssetAttachmentKind(remainingAttachment.caption, remainingAttachment.url) === "PHOTO"
+        );
+
+        if (nextPrimaryPhoto) {
+          await tx.assetPhoto.update({
+            where: { id: nextPrimaryPhoto.id },
+            data: { isPrimary: true },
+          });
+        }
+      }
+    });
 
     await createAuditLog({
       request: _request,

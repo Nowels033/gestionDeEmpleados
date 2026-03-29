@@ -70,6 +70,16 @@ export async function POST(
     const rawBody = await request.json();
     const body = createAttachmentSchema.parse(rawBody);
 
+    const expectedFolderPrefix =
+      body.kind === "PHOTO" ? "/uploads/asset-photos/" : "/uploads/asset-invoices/";
+
+    if (!body.fileUrl.startsWith(expectedFolderPrefix)) {
+      return NextResponse.json(
+        { error: "Ruta de archivo invalida para este tipo de adjunto" },
+        { status: 400 }
+      );
+    }
+
     const asset = await prisma.asset.findUnique({
       where: { id },
       select: { id: true },

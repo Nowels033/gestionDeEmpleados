@@ -27,12 +27,25 @@ const folderRules: Record<
   },
   "user-documents": {
     directory: "user-documents",
-    acceptedMimePrefixes: ["application/pdf", "image/"],
+    acceptedMimePrefixes: [
+      "application/pdf",
+      "image/",
+      "application/msword",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ],
     acceptedExtensions: [".pdf", ".jpg", ".jpeg", ".png", ".webp", ".doc", ".docx"],
   },
   "asset-invoices": {
     directory: "asset-invoices",
-    acceptedMimePrefixes: ["application/pdf", "image/"],
+    acceptedMimePrefixes: [
+      "application/pdf",
+      "image/",
+      "application/vnd.ms-excel",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "text/csv",
+      "application/csv",
+      "text/plain",
+    ],
     acceptedExtensions: [".pdf", ".jpg", ".jpeg", ".png", ".webp", ".xls", ".xlsx", ".csv"],
   },
 };

@@ -26,6 +26,13 @@ export async function POST(
     const rawBody = await request.json();
     const body = createDocumentSchema.parse(rawBody);
 
+    if (!body.fileUrl.startsWith("/uploads/user-documents/")) {
+      return NextResponse.json(
+        { error: "Ruta de archivo invalida para documentos de usuario" },
+        { status: 400 }
+      );
+    }
+
     const userExists = await prisma.user.findUnique({
       where: { id },
       select: { id: true },
