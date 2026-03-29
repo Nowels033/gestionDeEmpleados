@@ -14,6 +14,14 @@ const createContractSchema = z.object({
   notes: z.string().trim().optional(),
   assetId: z.string().trim().optional(),
   departmentId: z.string().trim().optional(),
+}).superRefine((data, ctx) => {
+  if (!data.assetId && !data.departmentId) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["assetId"],
+      message: "Debes vincular el contrato a un activo o a un departamento",
+    });
+  }
 });
 
 export async function GET() {
@@ -67,6 +75,31 @@ export async function POST(request: Request) {
         { error: "La fecha de inicio no puede ser mayor a la fecha de fin" },
         { status: 400 }
       );
+    }
+
+    if (body.assetId) {
+      const asset = await prisma.asset.findUnique({
+        where: { id: body.assetId },
+        select: { id: true },
+      });
+
+      if (!asset) {
+        return NextResponse.json({ error: "Activo no encontrado" }, { status: 400 });
+      }
+    }
+
+    if (body.departmentId) {
+      const department = await prisma.department.findUnique({
+        where: { id: body.departmentId },
+        select: { id: true, isActive: true },
+      });
+
+      if (!department || !department.isActive) {
+        return NextResponse.json(
+          { error: "Departamento no encontrado o inactivo" },
+          { status: 400 }
+        );
+      }
     }
 
     const contract = await prisma.contract.create({

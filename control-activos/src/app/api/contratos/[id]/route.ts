@@ -53,12 +53,47 @@ export async function PATCH(
 
     const nextStartDate = body.startDate ?? previousContract.startDate;
     const nextEndDate = body.endDate ?? previousContract.endDate;
+    const nextAssetId = body.assetId !== undefined ? body.assetId : previousContract.assetId;
+    const nextDepartmentId =
+      body.departmentId !== undefined ? body.departmentId : previousContract.departmentId;
 
     if (nextStartDate > nextEndDate) {
       return NextResponse.json(
         { error: "La fecha de inicio no puede ser mayor a la fecha de fin" },
         { status: 400 }
       );
+    }
+
+    if (!nextAssetId && !nextDepartmentId) {
+      return NextResponse.json(
+        { error: "Debes vincular el contrato a un activo o a un departamento" },
+        { status: 400 }
+      );
+    }
+
+    if (nextAssetId) {
+      const asset = await prisma.asset.findUnique({
+        where: { id: nextAssetId },
+        select: { id: true },
+      });
+
+      if (!asset) {
+        return NextResponse.json({ error: "Activo no encontrado" }, { status: 400 });
+      }
+    }
+
+    if (nextDepartmentId) {
+      const department = await prisma.department.findUnique({
+        where: { id: nextDepartmentId },
+        select: { id: true, isActive: true },
+      });
+
+      if (!department || !department.isActive) {
+        return NextResponse.json(
+          { error: "Departamento no encontrado o inactivo" },
+          { status: 400 }
+        );
+      }
     }
 
     const contract = await prisma.contract.update({

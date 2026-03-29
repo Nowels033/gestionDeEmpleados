@@ -63,6 +63,43 @@ function isAllowedMimeType(fileType: string, acceptedPrefixes: string[]): boolea
   return acceptedPrefixes.some((prefix) => fileType.startsWith(prefix));
 }
 
+function hasPdfSignature(fileBuffer: Buffer): boolean {
+  return fileBuffer.length >= 5 && fileBuffer.subarray(0, 5).toString("ascii") === "%PDF-";
+}
+
+function hasPngSignature(fileBuffer: Buffer): boolean {
+  const pngHeader = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+  return pngHeader.every((value, index) => fileBuffer[index] === value);
+}
+
+function hasJpegSignature(fileBuffer: Buffer): boolean {
+  return fileBuffer.length >= 3 && fileBuffer[0] === 0xff && fileBuffer[1] === 0xd8 && fileBuffer[2] === 0xff;
+}
+
+function hasWebpSignature(fileBuffer: Buffer): boolean {
+  return (
+    fileBuffer.length >= 12 &&
+    fileBuffer.subarray(0, 4).toString("ascii") === "RIFF" &&
+    fileBuffer.subarray(8, 12).toString("ascii") === "WEBP"
+  );
+}
+
+function hasExpectedBinarySignature(fileBuffer: Buffer, extension: string): boolean {
+  switch (extension) {
+    case ".pdf":
+      return hasPdfSignature(fileBuffer);
+    case ".png":
+      return hasPngSignature(fileBuffer);
+    case ".jpg":
+    case ".jpeg":
+      return hasJpegSignature(fileBuffer);
+    case ".webp":
+      return hasWebpSignature(fileBuffer);
+    default:
+      return true;
+  }
+}
+
 export async function POST(request: Request) {
   try {
     const { error, session } = await requireRoles(["ADMIN", "EDITOR"]);
@@ -115,7 +152,16 @@ export async function POST(request: Request) {
     const targetPath = path.join(targetDir, generatedName);
 
     const bytes = await file.arrayBuffer();
-    await writeFile(targetPath, Buffer.from(bytes));
+    const fileBuffer = Buffer.from(bytes);
+
+    if (!hasExpectedBinarySignature(fileBuffer, extension)) {
+      return NextResponse.json(
+        { error: "El archivo no coincide con su extension declarada" },
+        { status: 415 }
+      );
+    }
+
+    await writeFile(targetPath, fileBuffer);
 
     const fileUrl = `/uploads/${rule.directory}/${dayFolder}/${generatedName}`;
 
