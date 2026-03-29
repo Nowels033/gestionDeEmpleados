@@ -19,7 +19,7 @@ export function DashboardPageHeader({
   return (
     <div
       className={cn(
-        "relative overflow-hidden rounded-xl border border-border bg-[linear-gradient(180deg,#121212_0%,#0f0f0f_100%)] px-6 py-5 shadow-[0_1px_0_rgba(255,255,255,0.03)_inset,0_20px_36px_-30px_rgba(0,0,0,0.9)] before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:h-px before:bg-[linear-gradient(90deg,transparent,rgba(0,242,254,0.55),transparent)] md:px-7 md:py-6",
+        "relative overflow-hidden rounded-xl border border-border bg-[linear-gradient(180deg,#121212_0%,#0f0f0f_100%)] px-6 py-5 shadow-[0_1px_0_rgba(255,255,255,0.03)_inset,0_20px_36px_-30px_rgba(0,0,0,0.9)] before:pointer-events-none before:absolute before:inset-x-0 before:top-[1px] before:h-px before:bg-[linear-gradient(90deg,transparent,rgba(0,242,254,0.55),transparent)] after:pointer-events-none after:absolute after:inset-x-0 after:top-0 after:h-px after:bg-white/10 md:px-7 md:py-6",
         className
       )}
     >
