@@ -52,6 +52,36 @@ export async function PATCH(
       return NextResponse.json({ error: "Activo no encontrado" }, { status: 404 });
     }
 
+    if (body.status) {
+      const activeAssignmentsCount = await prisma.assignment.count({
+        where: {
+          assetId: id,
+          status: "ACTIVE",
+        },
+      });
+
+      if (body.status === "ASSIGNED" && activeAssignmentsCount === 0) {
+        return NextResponse.json(
+          { error: "No se puede marcar como asignado sin una asignacion activa" },
+          { status: 409 }
+        );
+      }
+
+      if (body.status === "AVAILABLE" && activeAssignmentsCount > 0) {
+        return NextResponse.json(
+          { error: "No se puede marcar como disponible con asignaciones activas" },
+          { status: 409 }
+        );
+      }
+
+      if ((body.status === "MAINTENANCE" || body.status === "RETIRED") && activeAssignmentsCount > 0) {
+        return NextResponse.json(
+          { error: "Debes cerrar las asignaciones activas antes de cambiar este estado" },
+          { status: 409 }
+        );
+      }
+    }
+
     const asset = await prisma.asset.update({
       where: { id },
       data: body,

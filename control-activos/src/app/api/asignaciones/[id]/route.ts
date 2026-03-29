@@ -1,9 +1,23 @@
+import type { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireRoles } from "@/lib/api-auth";
 import { createAuditLog } from "@/lib/audit-log";
 import { syncAssetStatusFromAssignments } from "@/lib/asset-assignment-sync";
 import { z } from "zod";
+
+class AssignmentOperationError extends Error {
+  status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.status = status;
+  }
+}
+
+async function lockAssetRow(tx: Prisma.TransactionClient, assetId: string) {
+  await tx.$queryRaw`SELECT id FROM assets WHERE id = ${assetId} FOR UPDATE`;
+}
 
 const updateAssignmentSchema = z.object({
   status: z.enum(["ACTIVE", "RETURNED", "TRANSFERRED"]).optional(),
@@ -92,22 +106,11 @@ export async function PATCH(
     const isTransferOperation =
       body.status === "TRANSFERRED" && hasTransferPayload(body) && destinationChanged;
 
-    if (body.status === "ACTIVE") {
-      const conflictingActiveAssignment = await prisma.assignment.findFirst({
-        where: {
-          id: { not: assignment.id },
-          assetId: assignment.assetId,
-          status: "ACTIVE",
-        },
-        select: { id: true },
-      });
-
-      if (conflictingActiveAssignment) {
-        return NextResponse.json(
-          { error: "El activo ya tiene otra asignacion activa" },
-          { status: 409 }
-        );
-      }
+    if (body.status === "TRANSFERRED" && !isTransferOperation && assignment.status !== "TRANSFERRED") {
+      return NextResponse.json(
+        { error: "Para transferir debes indicar un nuevo destino" },
+        { status: 400 }
+      );
     }
 
     if (isTransferOperation && assignment.status !== "ACTIVE") {
@@ -119,6 +122,21 @@ export async function PATCH(
 
     if (isTransferOperation) {
       const transferredAssignment = await prisma.$transaction(async (tx) => {
+        await lockAssetRow(tx, assignment.assetId);
+
+        const conflictingActiveAssignment = await tx.assignment.findFirst({
+          where: {
+            id: { not: assignment.id },
+            assetId: assignment.assetId,
+            status: "ACTIVE",
+          },
+          select: { id: true },
+        });
+
+        if (conflictingActiveAssignment) {
+          throw new AssignmentOperationError("El activo ya tiene otra asignacion activa", 409);
+        }
+
         const previousAssignment = await tx.assignment.update({
           where: { id },
           data: {
@@ -219,6 +237,23 @@ export async function PATCH(
     }
 
     const updatedAssignment = await prisma.$transaction(async (tx) => {
+      if (body.status === "ACTIVE") {
+        await lockAssetRow(tx, assignment.assetId);
+
+        const conflictingActiveAssignment = await tx.assignment.findFirst({
+          where: {
+            id: { not: assignment.id },
+            assetId: assignment.assetId,
+            status: "ACTIVE",
+          },
+          select: { id: true },
+        });
+
+        if (conflictingActiveAssignment) {
+          throw new AssignmentOperationError("El activo ya tiene otra asignacion activa", 409);
+        }
+      }
+
       const data: {
         status?: "ACTIVE" | "RETURNED" | "TRANSFERRED";
         type?: "PERSONAL" | "DEPARTAMENTAL";
@@ -312,6 +347,10 @@ export async function PATCH(
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: "Datos invalidos" }, { status: 400 });
+    }
+
+    if (error instanceof AssignmentOperationError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
     }
 
     console.error("Error updating assignment:", error);

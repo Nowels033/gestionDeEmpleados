@@ -470,7 +470,7 @@ export default function AsignacionesPage() {
     setSelectedAssignmentIds((prev) => Array.from(new Set([...prev, ...visibleIds])));
   };
 
-  const handleBulkStatusUpdate = async (status: "ACTIVE" | "RETURNED" | "TRANSFERRED") => {
+  const handleBulkStatusUpdate = async (status: "ACTIVE" | "RETURNED") => {
     if (selectedAssignmentIds.length === 0) {
       return;
     }
@@ -845,14 +845,6 @@ export default function AsignacionesPage() {
           >
             Marcar devueltas
           </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => handleBulkStatusUpdate("TRANSFERRED")}
-            disabled={bulkLoading}
-          >
-            Marcar transferidas
-          </Button>
           <Button variant="outline" size="sm" onClick={() => setSelectedAssignmentIds([])}>
             Limpiar
           </Button>
@@ -1014,13 +1006,15 @@ export default function AsignacionesPage() {
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ACTIVE">Activo</SelectItem>
-                  <SelectItem value="TRANSFERRED">Transferido</SelectItem>
-                  <SelectItem value="RETURNED">Devuelto</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+                  <SelectContent>
+                    <SelectItem value="ACTIVE">Activo</SelectItem>
+                    <SelectItem value="TRANSFERRED" disabled>
+                      Transferido (usa la accion Transferir)
+                    </SelectItem>
+                    <SelectItem value="RETURNED">Devuelto</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
 
             {editData.type === "PERSONAL" ? (
               <div className="space-y-2">

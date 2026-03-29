@@ -311,6 +311,10 @@ export async function POST(request: Request) {
         errors.push("Estado invalido");
       }
 
+      if (normalizedStatus === "ASSIGNED") {
+        errors.push("Estado ASSIGNED no permitido en importacion. Crea la asignacion despues de importar");
+      }
+
       const normalizedEnsLevel = normalizeEnsLevel(fields.ensLevel);
       if (!normalizedEnsLevel) {
         errors.push("Nivel ENS invalido");

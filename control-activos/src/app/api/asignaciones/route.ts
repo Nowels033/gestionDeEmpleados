@@ -1,9 +1,23 @@
+import type { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuthenticated, requireRoles } from "@/lib/api-auth";
 import { createAuditLog } from "@/lib/audit-log";
 import { syncAssetStatusFromAssignments } from "@/lib/asset-assignment-sync";
 import { z } from "zod";
+
+class AssignmentOperationError extends Error {
+  status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.status = status;
+  }
+}
+
+async function lockAssetRow(tx: Prisma.TransactionClient, assetId: string) {
+  await tx.$queryRaw`SELECT id FROM assets WHERE id = ${assetId} FOR UPDATE`;
+}
 
 const createAssignmentSchema = z
   .object({
@@ -88,38 +102,37 @@ export async function POST(request: Request) {
     const rawBody = await request.json();
     const body = createAssignmentSchema.parse(rawBody);
 
-    const asset = await prisma.asset.findUnique({
-      where: { id: body.assetId },
-      select: { id: true, status: true },
-    });
-
-    if (!asset) {
-      return NextResponse.json({ error: "Activo no encontrado" }, { status: 404 });
-    }
-
-    if (asset.status === "RETIRED" || asset.status === "MAINTENANCE") {
-      return NextResponse.json(
-        { error: "No se puede asignar un activo retirado o en mantenimiento" },
-        { status: 409 }
-      );
-    }
-
-    const activeAssignment = await prisma.assignment.findFirst({
-      where: {
-        assetId: body.assetId,
-        status: "ACTIVE",
-      },
-      select: { id: true },
-    });
-
-    if (activeAssignment) {
-      return NextResponse.json(
-        { error: "El activo ya tiene una asignacion activa" },
-        { status: 409 }
-      );
-    }
-
     const assignment = await prisma.$transaction(async (tx) => {
+      await lockAssetRow(tx, body.assetId);
+
+      const asset = await tx.asset.findUnique({
+        where: { id: body.assetId },
+        select: { id: true, status: true },
+      });
+
+      if (!asset) {
+        throw new AssignmentOperationError("Activo no encontrado", 404);
+      }
+
+      if (asset.status === "RETIRED" || asset.status === "MAINTENANCE") {
+        throw new AssignmentOperationError(
+          "No se puede asignar un activo retirado o en mantenimiento",
+          409
+        );
+      }
+
+      const activeAssignment = await tx.assignment.findFirst({
+        where: {
+          assetId: body.assetId,
+          status: "ACTIVE",
+        },
+        select: { id: true },
+      });
+
+      if (activeAssignment) {
+        throw new AssignmentOperationError("El activo ya tiene una asignacion activa", 409);
+      }
+
       const createdAssignment = await tx.assignment.create({
         data: {
           type: body.type,
@@ -174,6 +187,10 @@ export async function POST(request: Request) {
         },
         { status: 400 }
       );
+    }
+
+    if (error instanceof AssignmentOperationError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
     }
 
     console.error("Error creating assignment:", error);
