@@ -16,32 +16,52 @@ interface UseFetchResult<T> {
 export function useFetch<T>(url: string, defaultValue: T): UseFetchResult<T> {
   const defaultValueRef = React.useRef(defaultValue);
   const cachedAtInit = clientCache.get(url);
+  const hasResolvedOnceRef = React.useRef(Boolean(cachedAtInit));
+  const requestVersionRef = React.useRef(0);
+  const unmountedRef = React.useRef(false);
   const [data, setData] = React.useState<T>(
     (cachedAtInit?.data as T | undefined) ?? defaultValue
   );
   const [loading, setLoading] = React.useState(!cachedAtInit);
   const [error, setError] = React.useState<string | null>(null);
 
+  React.useEffect(() => {
+    return () => {
+      unmountedRef.current = true;
+    };
+  }, []);
+
   const fetchData = React.useCallback(async (force = false, silent = false) => {
+    const requestVersion = requestVersionRef.current + 1;
+    requestVersionRef.current = requestVersion;
+
     const cached = clientCache.get(url);
     const cacheIsFresh =
       cached && Date.now() - cached.timestamp < CLIENT_CACHE_TTL_MS;
 
     if (!force && cacheIsFresh) {
-      setData(cached.data as T);
-      setLoading(false);
-      setError(null);
+      if (!unmountedRef.current && requestVersion === requestVersionRef.current) {
+        setData(cached.data as T);
+        setLoading(false);
+        setError(null);
+      }
+
+      hasResolvedOnceRef.current = true;
       return;
     }
 
     if (!force && cached && !cacheIsFresh) {
-      setData(cached.data as T);
-      setLoading(false);
-      setError(null);
+      if (!unmountedRef.current && requestVersion === requestVersionRef.current) {
+        setData(cached.data as T);
+        setLoading(false);
+        setError(null);
+      }
+
+      hasResolvedOnceRef.current = true;
     }
 
     try {
-      if (!silent && !cached) {
+      if (!silent && !cached && !hasResolvedOnceRef.current) {
         setLoading(true);
       }
       setError(null);
@@ -62,6 +82,12 @@ export function useFetch<T>(url: string, defaultValue: T): UseFetchResult<T> {
         inflightRequests.delete(url);
       }
 
+      if (unmountedRef.current || requestVersion !== requestVersionRef.current) {
+        return;
+      }
+
+      hasResolvedOnceRef.current = true;
+
       const safeDefaultValue = defaultValueRef.current;
 
       // Validar que el resultado sea del tipo esperado
@@ -76,12 +102,19 @@ export function useFetch<T>(url: string, defaultValue: T): UseFetchResult<T> {
       }
     } catch (err) {
       inflightRequests.delete(url);
+      if (unmountedRef.current || requestVersion !== requestVersionRef.current) {
+        return;
+      }
+
+      hasResolvedOnceRef.current = true;
       console.error(`Error fetching ${url}:`, err);
       setError("Error al cargar datos");
       const staleCache = clientCache.get(url);
       setData((staleCache?.data as T | undefined) ?? defaultValueRef.current);
     } finally {
-      setLoading(false);
+      if (!unmountedRef.current && requestVersion === requestVersionRef.current) {
+        setLoading(false);
+      }
     }
   }, [url]);
 

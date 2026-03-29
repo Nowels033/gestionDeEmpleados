@@ -116,6 +116,7 @@ export default function UsuariosPage() {
   const { data: departments } = useFetch<Department[]>("/api/departamentos?view=options", []);
 
   const [searchQuery, setSearchQuery] = React.useState("");
+  const deferredSearchQuery = React.useDeferredValue(searchQuery);
   const [dialogOpen, setDialogOpen] = React.useState(false);
   const [selectedUser, setSelectedUser] = React.useState<User | null>(null);
   const [detailDialogOpen, setDetailDialogOpen] = React.useState(false);
@@ -166,7 +167,7 @@ export default function UsuariosPage() {
   const [deletingUserDocumentId, setDeletingUserDocumentId] = React.useState<string | null>(null);
 
   const filteredUsers = React.useMemo(() => {
-    const normalizedQuery = searchQuery.trim().toLowerCase();
+    const normalizedQuery = deferredSearchQuery.trim().toLowerCase();
 
     return users.filter(
       (user) =>
@@ -175,7 +176,7 @@ export default function UsuariosPage() {
         user.email.toLowerCase().includes(normalizedQuery) ||
         user.employeeNumber.toLowerCase().includes(normalizedQuery)
     );
-  }, [users, searchQuery]);
+  }, [users, deferredSearchQuery]);
 
   const totalPages = Math.max(1, Math.ceil(filteredUsers.length / ITEMS_PER_PAGE));
 
@@ -183,6 +184,8 @@ export default function UsuariosPage() {
     const start = (currentPage - 1) * ITEMS_PER_PAGE;
     return filteredUsers.slice(start, start + ITEMS_PER_PAGE);
   }, [filteredUsers, currentPage]);
+
+  const shouldStaggerUserCards = paginatedUsers.length <= 12;
 
   const allFilteredSelected =
     paginatedUsers.length > 0 &&
@@ -958,7 +961,7 @@ export default function UsuariosPage() {
               key={user.id}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: index * 0.05 }}
+              transition={{ delay: shouldStaggerUserCards ? Math.min(index, 8) * 0.03 : 0 }}
             >
               <Card className="group cursor-pointer overflow-hidden border-border transition-all duration-200 ease-in-out">
                 <CardContent className="p-6">

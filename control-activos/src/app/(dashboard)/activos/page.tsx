@@ -286,6 +286,7 @@ export default function ActivosPage() {
 
   const [viewMode, setViewMode] = React.useState<"grid" | "list">("grid");
   const [searchQuery, setSearchQuery] = React.useState("");
+  const deferredSearchQuery = React.useDeferredValue(searchQuery);
   const [statusFilter, setStatusFilter] = React.useState("all");
   const [categoryFilter, setCategoryFilter] = React.useState("all");
   const [ensFilter, setEnsFilter] = React.useState("all");
@@ -1285,7 +1286,7 @@ export default function ActivosPage() {
   }, [resetForm]);
 
   const filteredAssets = React.useMemo(() => {
-    const normalizedQuery = searchQuery.trim().toLowerCase();
+    const normalizedQuery = deferredSearchQuery.trim().toLowerCase();
     const minValue = valueMin.trim() === "" ? null : Number(valueMin);
     const maxValue = valueMax.trim() === "" ? null : Number(valueMax);
 
@@ -1316,7 +1317,7 @@ export default function ActivosPage() {
     });
   }, [
     assets,
-    searchQuery,
+    deferredSearchQuery,
     statusFilter,
     categoryFilter,
     ensFilter,
@@ -1438,6 +1439,8 @@ export default function ActivosPage() {
     const start = (currentPage - 1) * ITEMS_PER_PAGE;
     return sortedAssets.slice(start, start + ITEMS_PER_PAGE);
   }, [sortedAssets, currentPage]);
+
+  const shouldStaggerAssetCards = paginatedAssets.length <= 12;
 
   const firstVisibleIndex = sortedAssets.length === 0 ? 0 : (currentPage - 1) * ITEMS_PER_PAGE + 1;
   const lastVisibleIndex = Math.min(currentPage * ITEMS_PER_PAGE, sortedAssets.length);
@@ -1964,7 +1967,7 @@ export default function ActivosPage() {
                 key={asset.id}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.04 }}
+                transition={{ delay: shouldStaggerAssetCards ? Math.min(index, 8) * 0.025 : 0 }}
               >
                 <Card className="group overflow-hidden border-border transition-all duration-200 ease-in-out hover:border-border hover:shadow-[0_24px_36px_-32px_rgba(0,0,0,0.95)]">
                   <div className="relative flex h-48 items-center justify-center border-b border-border bg-[linear-gradient(160deg,#111111_0%,#0d0d0d_100%)]">
