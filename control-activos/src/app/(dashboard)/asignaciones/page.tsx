@@ -16,6 +16,8 @@ import {
   MoreVertical,
   CheckCircle,
   XCircle,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -121,6 +123,7 @@ export default function AsignacionesPage() {
   const { data: departments } = useFetch<DepartmentOption[]>("/api/departamentos?view=options", []);
 
   const [searchQuery, setSearchQuery] = React.useState("");
+  const deferredSearchQuery = React.useDeferredValue(searchQuery);
   const [statusFilter, setStatusFilter] = React.useState("all");
   const [typeFilter, setTypeFilter] = React.useState("all");
   const [dialogOpen, setDialogOpen] = React.useState(false);
@@ -152,6 +155,8 @@ export default function AsignacionesPage() {
     departmentId: "",
     notes: "",
   });
+  const [currentPage, setCurrentPage] = React.useState(1);
+  const ITEMS_PER_PAGE = 18;
 
   const availableAssets = assets.filter(
     (asset) =>
@@ -204,23 +209,45 @@ export default function AsignacionesPage() {
     );
   }, [filtersHydrated, searchQuery, statusFilter, typeFilter]);
 
-  const filteredAssignments = assignments.filter((assignment) => {
-    const searchText = searchQuery.toLowerCase();
-    const userName = assignment.user
-      ? `${assignment.user.name} ${assignment.user.lastName}`.toLowerCase()
-      : "";
+  const filteredAssignments = React.useMemo(() => {
+    const searchText = deferredSearchQuery.toLowerCase();
 
-    const matchesSearch =
-      assignment.asset.name.toLowerCase().includes(searchText) ||
-      assignment.asset.id.toLowerCase().includes(searchText) ||
-      assignment.department?.name.toLowerCase().includes(searchText) ||
-      userName.includes(searchText);
+    return assignments.filter((assignment) => {
+      const userName = assignment.user
+        ? `${assignment.user.name} ${assignment.user.lastName}`.toLowerCase()
+        : "";
 
-    const matchesStatus = statusFilter === "all" || assignment.status === statusFilter;
-    const matchesType = typeFilter === "all" || assignment.type === typeFilter;
+      const matchesSearch =
+        assignment.asset.name.toLowerCase().includes(searchText) ||
+        assignment.asset.id.toLowerCase().includes(searchText) ||
+        assignment.department?.name.toLowerCase().includes(searchText) ||
+        userName.includes(searchText);
 
-    return matchesSearch && matchesStatus && matchesType;
-  });
+      const matchesStatus = statusFilter === "all" || assignment.status === statusFilter;
+      const matchesType = typeFilter === "all" || assignment.type === typeFilter;
+
+      return matchesSearch && matchesStatus && matchesType;
+    });
+  }, [assignments, deferredSearchQuery, statusFilter, typeFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredAssignments.length / ITEMS_PER_PAGE));
+
+  const paginatedAssignments = React.useMemo(() => {
+    const start = (currentPage - 1) * ITEMS_PER_PAGE;
+    return filteredAssignments.slice(start, start + ITEMS_PER_PAGE);
+  }, [filteredAssignments, currentPage]);
+
+  React.useEffect(() => {
+    setCurrentPage(1);
+  }, [deferredSearchQuery, statusFilter, typeFilter]);
+
+  React.useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
+
+  const shouldStaggerAssignmentCards = paginatedAssignments.length <= 14;
 
   const formatDate = (date: string) => {
     return new Date(date).toLocaleDateString("es-MX", {
@@ -458,11 +485,11 @@ export default function AsignacionesPage() {
   };
 
   const allFilteredSelected =
-    filteredAssignments.length > 0 &&
-    filteredAssignments.every((assignment) => selectedAssignmentIds.includes(assignment.id));
+    paginatedAssignments.length > 0 &&
+    paginatedAssignments.every((assignment) => selectedAssignmentIds.includes(assignment.id));
 
   const toggleAllFilteredAssignments = () => {
-    const visibleIds = filteredAssignments.map((assignment) => assignment.id);
+    const visibleIds = paginatedAssignments.map((assignment) => assignment.id);
     if (allFilteredSelected) {
       setSelectedAssignmentIds((prev) => prev.filter((id) => !visibleIds.includes(id)));
       return;
@@ -626,7 +653,7 @@ export default function AsignacionesPage() {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filteredAssignments, selectedAssignmentIds]);
+  }, [filteredAssignments, paginatedAssignments, selectedAssignmentIds]);
 
   if (loading) {
     return <Loading text="Cargando asignaciones..." />;
@@ -864,14 +891,14 @@ export default function AsignacionesPage() {
             onAction={() => setDialogOpen(true)}
           />
         ) : (
-        filteredAssignments.map((assignment, index) => {
-          const StatusIcon = statusColors[assignment.status].icon;
-          return (
+          paginatedAssignments.map((assignment, index) => {
+            const StatusIcon = statusColors[assignment.status].icon;
+            return (
             <motion.div
               key={assignment.id}
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: index * 0.03 }}
+              transition={{ delay: shouldStaggerAssignmentCards ? Math.min(index, 10) * 0.02 : 0 }}
             >
               <Card className="group border-border transition-all duration-200 ease-in-out">
                 <CardContent className="p-4">
@@ -959,9 +986,38 @@ export default function AsignacionesPage() {
                 </CardContent>
               </Card>
             </motion.div>
-          );
-        }))}
+            );
+          })
+        )}
       </div>
+
+      {filteredAssignments.length > ITEMS_PER_PAGE ? (
+        <div className="ml-auto flex w-fit items-center gap-2 rounded-lg border border-border bg-card p-1.5">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+            disabled={currentPage <= 1}
+          >
+            <ChevronLeft className="h-4 w-4" />
+            <span className="sr-only">Pagina anterior</span>
+          </Button>
+          <span className="min-w-[160px] text-center text-sm text-muted-foreground">
+            Pagina {currentPage} de {totalPages}
+          </span>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+            disabled={currentPage >= totalPages}
+          >
+            <ChevronRight className="h-4 w-4" />
+            <span className="sr-only">Pagina siguiente</span>
+          </Button>
+        </div>
+      ) : null}
 
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
         <DialogContent className="sm:max-w-[500px]">
