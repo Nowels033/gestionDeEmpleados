@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireRoles } from "@/lib/api-auth";
+import { createAuditLog } from "@/lib/audit-log";
 import { z } from "zod";
 
 const updateDepartmentSchema = z.object({
@@ -15,14 +16,29 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error } = await requireRoles(["ADMIN", "EDITOR"]);
-    if (error) {
+    const { error, session } = await requireRoles(["ADMIN", "EDITOR"]);
+    if (error || !session) {
       return error;
     }
 
     const { id } = await params;
     const rawBody = await request.json();
     const body = updateDepartmentSchema.parse(rawBody);
+
+    const previousDepartment = await prisma.department.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        location: true,
+        isActive: true,
+      },
+    });
+
+    if (!previousDepartment) {
+      return NextResponse.json({ error: "Departamento no encontrado" }, { status: 404 });
+    }
 
     const department = await prisma.department.update({
       where: { id },
@@ -34,6 +50,23 @@ export async function PATCH(
             assignments: true,
           },
         },
+      },
+    });
+
+    await createAuditLog({
+      request,
+      userId: session.user.id,
+      action: "UPDATE",
+      entity: "department",
+      entityId: department.id,
+      description: `Departamento actualizado: ${department.name}`,
+      oldValue: previousDepartment,
+      newValue: {
+        id: department.id,
+        name: department.name,
+        description: department.description,
+        location: department.location,
+        isActive: department.isActive,
       },
     });
 
@@ -57,8 +90,8 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error } = await requireRoles(["ADMIN"]);
-    if (error) {
+    const { error, session } = await requireRoles(["ADMIN"]);
+    if (error || !session) {
       return error;
     }
 
@@ -138,6 +171,19 @@ export async function DELETE(
         await tx.department.delete({ where: { id } });
       });
 
+      await createAuditLog({
+        request,
+        userId: session.user.id,
+        action: "DELETE",
+        entity: "department",
+        entityId: id,
+        description: `Departamento eliminado: ${department.name}`,
+        oldValue: {
+          ...department,
+          movedToDepartmentId: targetDepartmentId,
+        },
+      });
+
       return NextResponse.json({ ok: true });
     }
 
@@ -156,6 +202,19 @@ export async function DELETE(
         await tx.department.delete({ where: { id } });
       });
 
+      await createAuditLog({
+        request,
+        userId: session.user.id,
+        action: "DELETE",
+        entity: "department",
+        entityId: id,
+        description: `Departamento eliminado: ${department.name}`,
+        oldValue: {
+          ...department,
+          movedToDepartmentId: null,
+        },
+      });
+
       return NextResponse.json({ ok: true });
     }
 
@@ -171,6 +230,19 @@ export async function DELETE(
       });
 
       await tx.department.delete({ where: { id } });
+    });
+
+    await createAuditLog({
+      request,
+      userId: session.user.id,
+      action: "DELETE",
+      entity: "department",
+      entityId: id,
+      description: `Departamento eliminado: ${department.name}`,
+      oldValue: {
+        ...department,
+        movedToDepartmentId: targetDepartmentId,
+      },
     });
 
     return NextResponse.json({ ok: true });

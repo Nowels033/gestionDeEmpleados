@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireRoles } from "@/lib/api-auth";
+import { createAuditLog } from "@/lib/audit-log";
 import { z } from "zod";
 
 const updateAssetSchema = z.object({
@@ -25,14 +26,31 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error } = await requireRoles(["ADMIN", "EDITOR"]);
-    if (error) {
+    const { error, session } = await requireRoles(["ADMIN", "EDITOR"]);
+    if (error || !session) {
       return error;
     }
 
     const { id } = await params;
     const rawBody = await request.json();
     const body = updateAssetSchema.parse(rawBody);
+
+    const previousAsset = await prisma.asset.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        name: true,
+        status: true,
+        categoryId: true,
+        securityUserId: true,
+        serialNumber: true,
+        qrCode: true,
+      },
+    });
+
+    if (!previousAsset) {
+      return NextResponse.json({ error: "Activo no encontrado" }, { status: 404 });
+    }
 
     const asset = await prisma.asset.update({
       where: { id },
@@ -68,6 +86,26 @@ export async function PATCH(
       },
     });
 
+    await createAuditLog({
+      request,
+      userId: session.user.id,
+      action: "UPDATE",
+      entity: "asset",
+      entityId: asset.id,
+      assetId: asset.id,
+      description: `Activo actualizado: ${asset.name}`,
+      oldValue: previousAsset,
+      newValue: {
+        id: asset.id,
+        name: asset.name,
+        status: asset.status,
+        categoryId: asset.category.id,
+        securityUserId: asset.securityUser.id,
+        serialNumber: asset.serialNumber,
+        qrCode: asset.qrCode,
+      },
+    });
+
     return NextResponse.json(asset);
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -84,19 +122,27 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error } = await requireRoles(["ADMIN"]);
-    if (error) {
+    const { error, session } = await requireRoles(["ADMIN"]);
+    if (error || !session) {
       return error;
     }
 
     const { id } = await params;
     const assetExists = await prisma.asset.findUnique({
       where: { id },
-      select: { id: true, name: true },
+      select: {
+        id: true,
+        name: true,
+        serialNumber: true,
+        qrCode: true,
+        status: true,
+        categoryId: true,
+        securityUserId: true,
+      },
     });
 
     if (!assetExists) {
@@ -107,9 +153,22 @@ export async function DELETE(
       await tx.assignment.deleteMany({ where: { assetId: id } });
       await tx.maintenanceLog.deleteMany({ where: { assetId: id } });
       await tx.contract.deleteMany({ where: { assetId: id } });
-      await tx.auditLog.deleteMany({ where: { entity: "asset", entityId: id } });
+      await tx.auditLog.updateMany({
+        where: { assetId: id },
+        data: { assetId: null },
+      });
       await tx.assetPhoto.deleteMany({ where: { assetId: id } });
       await tx.asset.delete({ where: { id } });
+    });
+
+    await createAuditLog({
+      request,
+      userId: session.user.id,
+      action: "DELETE",
+      entity: "asset",
+      entityId: id,
+      description: `Activo eliminado: ${assetExists.name}`,
+      oldValue: assetExists,
     });
 
     return NextResponse.json({ ok: true });

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuthenticated, requireRoles } from "@/lib/api-auth";
+import { createAuditLog } from "@/lib/audit-log";
 import { z } from "zod";
 
 const createCategorySchema = z.object({
@@ -66,8 +67,8 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const { error } = await requireRoles(["ADMIN", "EDITOR"]);
-    if (error) {
+    const { error, session } = await requireRoles(["ADMIN", "EDITOR"]);
+    if (error || !session) {
       return error;
     }
 
@@ -80,6 +81,20 @@ export async function POST(request: Request) {
         description: body.description,
         icon: body.icon,
         parentId: body.parentId || null,
+      },
+    });
+
+    await createAuditLog({
+      request,
+      userId: session.user.id,
+      action: "CREATE",
+      entity: "category",
+      entityId: category.id,
+      description: `Categoria creada: ${category.name}`,
+      newValue: {
+        id: category.id,
+        name: category.name,
+        parentId: category.parentId,
       },
     });
 

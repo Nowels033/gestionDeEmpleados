@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAssetAttachmentKind } from "@/lib/asset-attachments";
 import { requireRoles } from "@/lib/api-auth";
+import { createAuditLog } from "@/lib/audit-log";
 import { prisma } from "@/lib/prisma";
 
 export async function PATCH(
@@ -10,8 +11,8 @@ export async function PATCH(
   }: { params: Promise<{ id: string; attachmentId: string }> }
 ) {
   try {
-    const { error } = await requireRoles(["ADMIN", "EDITOR"]);
-    if (error) {
+    const { error, session } = await requireRoles(["ADMIN", "EDITOR"]);
+    if (error || !session) {
       return error;
     }
 
@@ -45,6 +46,20 @@ export async function PATCH(
       });
     });
 
+    await createAuditLog({
+      request: _request,
+      userId: session.user.id,
+      action: "SET_PRIMARY",
+      entity: "asset_attachment",
+      entityId: attachmentId,
+      assetId: id,
+      description: "Foto principal del activo actualizada",
+      newValue: {
+        attachmentId,
+        assetId: id,
+      },
+    });
+
     return NextResponse.json({ ok: true });
   } catch (error) {
     console.error("Error updating asset attachment:", error);
@@ -62,8 +77,8 @@ export async function DELETE(
   }: { params: Promise<{ id: string; attachmentId: string }> }
 ) {
   try {
-    const { error } = await requireRoles(["ADMIN", "EDITOR"]);
-    if (error) {
+    const { error, session } = await requireRoles(["ADMIN", "EDITOR"]);
+    if (error || !session) {
       return error;
     }
 
@@ -71,7 +86,7 @@ export async function DELETE(
 
     const attachment = await prisma.assetPhoto.findFirst({
       where: { id: attachmentId, assetId: id },
-      select: { id: true },
+      select: { id: true, caption: true, url: true, isPrimary: true },
     });
 
     if (!attachment) {
@@ -79,6 +94,17 @@ export async function DELETE(
     }
 
     await prisma.assetPhoto.delete({ where: { id: attachmentId } });
+
+    await createAuditLog({
+      request: _request,
+      userId: session.user.id,
+      action: "DELETE",
+      entity: "asset_attachment",
+      entityId: attachmentId,
+      assetId: id,
+      description: "Adjunto de activo eliminado",
+      oldValue: attachment,
+    });
 
     return NextResponse.json({ ok: true });
   } catch (error) {

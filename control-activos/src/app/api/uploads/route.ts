@@ -3,6 +3,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { NextResponse } from "next/server";
 import { requireRoles } from "@/lib/api-auth";
+import { createAuditLog } from "@/lib/audit-log";
 
 export const runtime = "nodejs";
 
@@ -51,8 +52,8 @@ function isAllowedMimeType(fileType: string, acceptedPrefixes: string[]): boolea
 
 export async function POST(request: Request) {
   try {
-    const { error } = await requireRoles(["ADMIN", "EDITOR"]);
-    if (error) {
+    const { error, session } = await requireRoles(["ADMIN", "EDITOR"]);
+    if (error || !session) {
       return error;
     }
 
@@ -104,6 +105,23 @@ export async function POST(request: Request) {
     await writeFile(targetPath, Buffer.from(bytes));
 
     const fileUrl = `/uploads/${rule.directory}/${dayFolder}/${generatedName}`;
+
+    await createAuditLog({
+      request,
+      userId: session.user.id,
+      action: "UPLOAD",
+      entity: "file_upload",
+      entityId: generatedName,
+      description: `Archivo subido en carpeta ${folder}`,
+      newValue: {
+        folder,
+        originalName: file.name,
+        generatedName,
+        mimeType: file.type,
+        fileSize: file.size,
+        fileUrl,
+      },
+    });
 
     return NextResponse.json({
       fileUrl,

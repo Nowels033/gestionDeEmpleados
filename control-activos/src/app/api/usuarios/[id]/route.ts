@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireRoles } from "@/lib/api-auth";
+import { createAuditLog } from "@/lib/audit-log";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 
@@ -24,14 +25,33 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error } = await requireRoles(["ADMIN", "EDITOR"]);
-    if (error) {
+    const { error, session } = await requireRoles(["ADMIN", "EDITOR"]);
+    if (error || !session) {
       return error;
     }
 
     const { id } = await params;
     const rawBody = await request.json();
     const body = updateUserSchema.parse(rawBody);
+
+    const previousUser = await prisma.user.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        lastName: true,
+        employeeNumber: true,
+        role: true,
+        isActive: true,
+        departmentId: true,
+        photo: true,
+      },
+    });
+
+    if (!previousUser) {
+      return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 });
+    }
 
     const data: Record<string, unknown> = { ...body };
     if (body.password) {
@@ -66,6 +86,26 @@ export async function PATCH(
 
     const { password, ...safeUser } = user;
     void password;
+
+    await createAuditLog({
+      request,
+      userId: session.user.id,
+      action: "UPDATE",
+      entity: "user",
+      entityId: safeUser.id,
+      description: `Usuario actualizado: ${safeUser.name} ${safeUser.lastName}`,
+      oldValue: previousUser,
+      newValue: {
+        id: safeUser.id,
+        email: safeUser.email,
+        employeeNumber: safeUser.employeeNumber,
+        role: safeUser.role,
+        isActive: safeUser.isActive,
+        departmentId: safeUser.departmentId,
+        photo: safeUser.photo,
+      },
+    });
+
     return NextResponse.json(safeUser);
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -89,17 +129,55 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error } = await requireRoles(["ADMIN"]);
-    if (error) {
+    const { error, session } = await requireRoles(["ADMIN"]);
+    if (error || !session) {
       return error;
     }
 
     const { id } = await params;
+    const existingUser = await prisma.user.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        lastName: true,
+        role: true,
+        employeeNumber: true,
+      },
+    });
+
+    if (!existingUser) {
+      return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 });
+    }
+
+    const performedActions = await prisma.auditLog.count({ where: { userId: id } });
+    if (performedActions > 0) {
+      return NextResponse.json(
+        {
+          error:
+            "No se puede eliminar este usuario porque tiene historial de auditoria. Desactivalo en su lugar.",
+        },
+        { status: 409 }
+      );
+    }
+
     await prisma.user.delete({ where: { id } });
+
+    await createAuditLog({
+      request,
+      userId: session.user.id,
+      action: "DELETE",
+      entity: "user",
+      entityId: id,
+      description: `Usuario eliminado: ${existingUser.name} ${existingUser.lastName}`,
+      oldValue: existingUser,
+    });
+
     return NextResponse.json({ ok: true });
   } catch (error) {
     if (typeof error === "object" && error !== null && "code" in error && error.code === "P2025") {

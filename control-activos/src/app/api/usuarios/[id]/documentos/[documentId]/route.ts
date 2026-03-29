@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireRoles } from "@/lib/api-auth";
+import { createAuditLog } from "@/lib/audit-log";
 import { prisma } from "@/lib/prisma";
 
 export async function DELETE(
@@ -9,8 +10,8 @@ export async function DELETE(
   }: { params: Promise<{ id: string; documentId: string }> }
 ) {
   try {
-    const { error } = await requireRoles(["ADMIN", "EDITOR"]);
-    if (error) {
+    const { error, session } = await requireRoles(["ADMIN", "EDITOR"]);
+    if (error || !session) {
       return error;
     }
 
@@ -18,7 +19,7 @@ export async function DELETE(
 
     const document = await prisma.document.findFirst({
       where: { id: documentId, userId: id },
-      select: { id: true },
+      select: { id: true, name: true, type: true, fileSize: true },
     });
 
     if (!document) {
@@ -26,6 +27,16 @@ export async function DELETE(
     }
 
     await prisma.document.delete({ where: { id: documentId } });
+
+    await createAuditLog({
+      request: _request,
+      userId: session.user.id,
+      action: "DELETE",
+      entity: "user_document",
+      entityId: documentId,
+      description: `Documento eliminado de usuario ${id}`,
+      oldValue: document,
+    });
 
     return NextResponse.json({ ok: true });
   } catch (error) {

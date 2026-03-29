@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuthenticated, requireRoles } from "@/lib/api-auth";
+import { createAuditLog } from "@/lib/audit-log";
 import { z } from "zod";
 
 const createContractSchema = z.object({
@@ -53,8 +54,8 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const { error } = await requireRoles(["ADMIN", "EDITOR"]);
-    if (error) {
+    const { error, session } = await requireRoles(["ADMIN", "EDITOR"]);
+    if (error || !session) {
       return error;
     }
 
@@ -94,6 +95,24 @@ export async function POST(request: Request) {
             name: true,
           },
         },
+      },
+    });
+
+    await createAuditLog({
+      request,
+      userId: session.user.id,
+      action: "CREATE",
+      entity: "contract",
+      entityId: contract.id,
+      assetId: contract.asset?.id || null,
+      description: `Contrato creado: ${contract.name}`,
+      newValue: {
+        type: contract.type,
+        status: contract.status,
+        provider: contract.provider,
+        startDate: contract.startDate,
+        endDate: contract.endDate,
+        value: contract.value,
       },
     });
 

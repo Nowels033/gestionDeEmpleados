@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuthenticated, requireRoles } from "@/lib/api-auth";
+import { createAuditLog } from "@/lib/audit-log";
 import { z } from "zod";
 
 const createAssetSchema = z.object({
@@ -139,8 +140,8 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const { error } = await requireRoles(["ADMIN", "EDITOR"]);
-    if (error) {
+    const { error, session } = await requireRoles(["ADMIN", "EDITOR"]);
+    if (error || !session) {
       return error;
     }
 
@@ -190,6 +191,22 @@ export async function POST(request: Request) {
           take: 1,
           orderBy: { assignedAt: "desc" },
         },
+      },
+    });
+
+    await createAuditLog({
+      request,
+      userId: session.user.id,
+      action: "CREATE",
+      entity: "asset",
+      entityId: asset.id,
+      assetId: asset.id,
+      description: `Activo creado: ${asset.name}`,
+      newValue: {
+        name: asset.name,
+        categoryId: asset.category.id,
+        securityUserId: asset.securityUser.id,
+        status: asset.status,
       },
     });
 

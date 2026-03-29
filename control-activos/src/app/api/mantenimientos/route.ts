@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuthenticated, requireRoles } from "@/lib/api-auth";
+import { createAuditLog } from "@/lib/audit-log";
 import { z } from "zod";
 
 const createMaintenanceSchema = z.object({
@@ -52,8 +53,8 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const { error } = await requireRoles(["ADMIN", "EDITOR"]);
-    if (error) {
+    const { error, session } = await requireRoles(["ADMIN", "EDITOR"]);
+    if (error || !session) {
       return error;
     }
 
@@ -85,6 +86,22 @@ export async function POST(request: Request) {
             lastName: true,
           },
         },
+      },
+    });
+
+    await createAuditLog({
+      request,
+      userId: session.user.id,
+      action: "CREATE",
+      entity: "maintenance",
+      entityId: maintenanceLog.id,
+      assetId: maintenanceLog.asset.id,
+      description: `Mantenimiento creado para ${maintenanceLog.asset.name}`,
+      newValue: {
+        type: maintenanceLog.type,
+        status: maintenanceLog.status,
+        scheduledDate: maintenanceLog.scheduledDate,
+        cost: maintenanceLog.cost,
       },
     });
 

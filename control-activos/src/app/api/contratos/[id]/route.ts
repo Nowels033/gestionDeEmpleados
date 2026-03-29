@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireRoles } from "@/lib/api-auth";
+import { createAuditLog } from "@/lib/audit-log";
 import { z } from "zod";
 
 const updateContractSchema = z.object({
@@ -21,14 +22,34 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error } = await requireRoles(["ADMIN", "EDITOR"]);
-    if (error) {
+    const { error, session } = await requireRoles(["ADMIN", "EDITOR"]);
+    if (error || !session) {
       return error;
     }
 
     const { id } = await params;
     const rawBody = await request.json();
     const body = updateContractSchema.parse(rawBody);
+
+    const previousContract = await prisma.contract.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        name: true,
+        type: true,
+        provider: true,
+        startDate: true,
+        endDate: true,
+        value: true,
+        status: true,
+        assetId: true,
+        departmentId: true,
+      },
+    });
+
+    if (!previousContract) {
+      return NextResponse.json({ error: "Contrato no encontrado" }, { status: 404 });
+    }
 
     const contract = await prisma.contract.update({
       where: { id },
@@ -40,6 +61,27 @@ export async function PATCH(
         department: {
           select: { id: true, name: true },
         },
+      },
+    });
+
+    await createAuditLog({
+      request,
+      userId: session.user.id,
+      action: "UPDATE",
+      entity: "contract",
+      entityId: contract.id,
+      assetId: contract.asset?.id || null,
+      description: `Contrato actualizado: ${contract.name}`,
+      oldValue: previousContract,
+      newValue: {
+        type: contract.type,
+        status: contract.status,
+        provider: contract.provider,
+        startDate: contract.startDate,
+        endDate: contract.endDate,
+        value: contract.value,
+        assetId: contract.asset?.id || null,
+        departmentId: contract.department?.id || null,
       },
     });
 
@@ -59,17 +101,45 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error } = await requireRoles(["ADMIN"]);
-    if (error) {
+    const { error, session } = await requireRoles(["ADMIN"]);
+    if (error || !session) {
       return error;
     }
 
     const { id } = await params;
+    const previousContract = await prisma.contract.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        name: true,
+        type: true,
+        status: true,
+        assetId: true,
+        departmentId: true,
+      },
+    });
+
+    if (!previousContract) {
+      return NextResponse.json({ error: "Contrato no encontrado" }, { status: 404 });
+    }
+
     await prisma.contract.delete({ where: { id } });
+
+    await createAuditLog({
+      request,
+      userId: session.user.id,
+      action: "DELETE",
+      entity: "contract",
+      entityId: id,
+      assetId: previousContract.assetId,
+      description: `Contrato eliminado: ${previousContract.name}`,
+      oldValue: previousContract,
+    });
+
     return NextResponse.json({ ok: true });
   } catch (error) {
     if (typeof error === "object" && error !== null && "code" in error && error.code === "P2025") {

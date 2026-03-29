@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireRoles } from "@/lib/api-auth";
+import { createAuditLog } from "@/lib/audit-log";
 import { prisma } from "@/lib/prisma";
 
 const createDocumentSchema = z.object({
@@ -16,8 +17,8 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error } = await requireRoles(["ADMIN", "EDITOR"]);
-    if (error) {
+    const { error, session } = await requireRoles(["ADMIN", "EDITOR"]);
+    if (error || !session) {
       return error;
     }
 
@@ -42,6 +43,21 @@ export async function POST(
         fileUrl: body.fileUrl,
         fileSize: body.fileSize,
         mimeType: body.mimeType,
+      },
+    });
+
+    await createAuditLog({
+      request,
+      userId: session.user.id,
+      action: "CREATE",
+      entity: "user_document",
+      entityId: document.id,
+      description: `Documento agregado a usuario ${id}`,
+      newValue: {
+        userId: id,
+        name: document.name,
+        type: document.type,
+        fileSize: document.fileSize,
       },
     });
 

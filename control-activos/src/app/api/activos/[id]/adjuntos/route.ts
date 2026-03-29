@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireRoles } from "@/lib/api-auth";
+import { createAuditLog } from "@/lib/audit-log";
 import {
   createAssetAttachmentCaption,
   getAssetAttachmentKind,
@@ -60,8 +61,8 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error } = await requireRoles(["ADMIN", "EDITOR"]);
-    if (error) {
+    const { error, session } = await requireRoles(["ADMIN", "EDITOR"]);
+    if (error || !session) {
       return error;
     }
 
@@ -94,6 +95,25 @@ export async function POST(
           isPrimary: body.kind === "PHOTO" ? Boolean(body.isPrimary) : false,
         },
       });
+    });
+
+    await createAuditLog({
+      request,
+      userId: session.user.id,
+      action: "CREATE",
+      entity: "asset_attachment",
+      entityId: created.id,
+      assetId: id,
+      description:
+        body.kind === "PHOTO"
+          ? "Foto de activo agregada"
+          : "Factura o comprobante de activo agregado",
+      newValue: {
+        kind: body.kind,
+        fileName: body.fileName,
+        url: created.url,
+        isPrimary: created.isPrimary,
+      },
     });
 
     return NextResponse.json(serializeAttachment(created), { status: 201 });

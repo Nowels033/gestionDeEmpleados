@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireRoles } from "@/lib/api-auth";
+import { createAuditLog } from "@/lib/audit-log";
 import { z } from "zod";
 
 const updateMaintenanceSchema = z.object({
@@ -19,14 +20,32 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error } = await requireRoles(["ADMIN", "EDITOR"]);
-    if (error) {
+    const { error, session } = await requireRoles(["ADMIN", "EDITOR"]);
+    if (error || !session) {
       return error;
     }
 
     const { id } = await params;
     const rawBody = await request.json();
     const body = updateMaintenanceSchema.parse(rawBody);
+
+    const previousMaintenance = await prisma.maintenanceLog.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        assetId: true,
+        type: true,
+        status: true,
+        scheduledDate: true,
+        completedDate: true,
+        cost: true,
+        technicianId: true,
+      },
+    });
+
+    if (!previousMaintenance) {
+      return NextResponse.json({ error: "Mantenimiento no encontrado" }, { status: 404 });
+    }
 
     const maintenanceLog = await prisma.maintenanceLog.update({
       where: { id },
@@ -38,6 +57,25 @@ export async function PATCH(
         technician: {
           select: { id: true, name: true, lastName: true },
         },
+      },
+    });
+
+    await createAuditLog({
+      request,
+      userId: session.user.id,
+      action: "UPDATE",
+      entity: "maintenance",
+      entityId: maintenanceLog.id,
+      assetId: maintenanceLog.asset.id,
+      description: `Mantenimiento actualizado para ${maintenanceLog.asset.name}`,
+      oldValue: previousMaintenance,
+      newValue: {
+        type: maintenanceLog.type,
+        status: maintenanceLog.status,
+        scheduledDate: maintenanceLog.scheduledDate,
+        completedDate: maintenanceLog.completedDate,
+        cost: maintenanceLog.cost,
+        technicianId: maintenanceLog.technician?.id || null,
       },
     });
 
@@ -57,17 +95,46 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error } = await requireRoles(["ADMIN"]);
-    if (error) {
+    const { error, session } = await requireRoles(["ADMIN"]);
+    if (error || !session) {
       return error;
     }
 
     const { id } = await params;
+    const previousMaintenance = await prisma.maintenanceLog.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        assetId: true,
+        type: true,
+        status: true,
+        scheduledDate: true,
+        completedDate: true,
+        cost: true,
+      },
+    });
+
+    if (!previousMaintenance) {
+      return NextResponse.json({ error: "Mantenimiento no encontrado" }, { status: 404 });
+    }
+
     await prisma.maintenanceLog.delete({ where: { id } });
+
+    await createAuditLog({
+      request,
+      userId: session.user.id,
+      action: "DELETE",
+      entity: "maintenance",
+      entityId: id,
+      assetId: previousMaintenance.assetId,
+      description: `Mantenimiento eliminado (${id})`,
+      oldValue: previousMaintenance,
+    });
+
     return NextResponse.json({ ok: true });
   } catch (error) {
     if (typeof error === "object" && error !== null && "code" in error && error.code === "P2025") {

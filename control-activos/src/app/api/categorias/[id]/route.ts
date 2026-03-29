@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireRoles } from "@/lib/api-auth";
+import { createAuditLog } from "@/lib/audit-log";
 import { z } from "zod";
 
 const updateCategorySchema = z.object({
@@ -15,14 +16,29 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error } = await requireRoles(["ADMIN", "EDITOR"]);
-    if (error) {
+    const { error, session } = await requireRoles(["ADMIN", "EDITOR"]);
+    if (error || !session) {
       return error;
     }
 
     const { id } = await params;
     const rawBody = await request.json();
     const body = updateCategorySchema.parse(rawBody);
+
+    const previousCategory = await prisma.category.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        icon: true,
+        parentId: true,
+      },
+    });
+
+    if (!previousCategory) {
+      return NextResponse.json({ error: "Categoria no encontrada" }, { status: 404 });
+    }
 
     const category = await prisma.category.update({
       where: { id },
@@ -32,6 +48,23 @@ export async function PATCH(
           select: { assets: true },
         },
         children: true,
+      },
+    });
+
+    await createAuditLog({
+      request,
+      userId: session.user.id,
+      action: "UPDATE",
+      entity: "category",
+      entityId: category.id,
+      description: `Categoria actualizada: ${category.name}`,
+      oldValue: previousCategory,
+      newValue: {
+        id: category.id,
+        name: category.name,
+        description: category.description,
+        icon: category.icon,
+        parentId: category.parentId,
       },
     });
 
@@ -51,17 +84,43 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error } = await requireRoles(["ADMIN"]);
-    if (error) {
+    const { error, session } = await requireRoles(["ADMIN"]);
+    if (error || !session) {
       return error;
     }
 
     const { id } = await params;
+    const previousCategory = await prisma.category.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        icon: true,
+        parentId: true,
+      },
+    });
+
+    if (!previousCategory) {
+      return NextResponse.json({ error: "Categoria no encontrada" }, { status: 404 });
+    }
+
     await prisma.category.delete({ where: { id } });
+
+    await createAuditLog({
+      request,
+      userId: session.user.id,
+      action: "DELETE",
+      entity: "category",
+      entityId: id,
+      description: `Categoria eliminada: ${previousCategory.name}`,
+      oldValue: previousCategory,
+    });
+
     return NextResponse.json({ ok: true });
   } catch (error) {
     if (typeof error === "object" && error !== null && "code" in error && error.code === "P2025") {

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuthenticated, requireRoles } from "@/lib/api-auth";
+import { createAuditLog } from "@/lib/audit-log";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 
@@ -127,8 +128,8 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const { error } = await requireRoles(["ADMIN"]);
-    if (error) {
+    const { error, session } = await requireRoles(["ADMIN"]);
+    if (error || !session) {
       return error;
     }
 
@@ -156,6 +157,23 @@ export async function POST(request: Request) {
 
     const { password: removedPassword, ...userWithoutPassword } = user;
     void removedPassword;
+
+    await createAuditLog({
+      request,
+      userId: session.user.id,
+      action: "CREATE",
+      entity: "user",
+      entityId: userWithoutPassword.id,
+      description: `Usuario creado: ${userWithoutPassword.name} ${userWithoutPassword.lastName}`,
+      newValue: {
+        id: userWithoutPassword.id,
+        email: userWithoutPassword.email,
+        employeeNumber: userWithoutPassword.employeeNumber,
+        role: userWithoutPassword.role,
+        departmentId: userWithoutPassword.departmentId,
+      },
+    });
+
     return NextResponse.json(userWithoutPassword, { status: 201 });
   } catch (error) {
     if (error instanceof z.ZodError) {

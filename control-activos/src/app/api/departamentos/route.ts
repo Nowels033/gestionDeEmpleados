@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuthenticated, requireRoles } from "@/lib/api-auth";
+import { createAuditLog } from "@/lib/audit-log";
 import { z } from "zod";
 
 const createDepartmentSchema = z.object({
@@ -102,8 +103,8 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const { error } = await requireRoles(["ADMIN", "EDITOR"]);
-    if (error) {
+    const { error, session } = await requireRoles(["ADMIN", "EDITOR"]);
+    if (error || !session) {
       return error;
     }
 
@@ -115,6 +116,20 @@ export async function POST(request: Request) {
         name: body.name,
         description: body.description,
         location: body.location,
+      },
+    });
+
+    await createAuditLog({
+      request,
+      userId: session.user.id,
+      action: "CREATE",
+      entity: "department",
+      entityId: department.id,
+      description: `Departamento creado: ${department.name}`,
+      newValue: {
+        id: department.id,
+        name: department.name,
+        location: department.location,
       },
     });
 

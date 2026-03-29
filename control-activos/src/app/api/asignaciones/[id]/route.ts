@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireRoles } from "@/lib/api-auth";
+import { createAuditLog } from "@/lib/audit-log";
 import { z } from "zod";
 
 const updateAssignmentSchema = z.object({
@@ -17,8 +18,8 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error } = await requireRoles(["ADMIN", "EDITOR"]);
-    if (error) {
+    const { error, session } = await requireRoles(["ADMIN", "EDITOR"]);
+    if (error || !session) {
       return error;
     }
 
@@ -28,7 +29,15 @@ export async function PATCH(
 
     const assignment = await prisma.assignment.findUnique({
       where: { id },
-      select: { id: true, assetId: true },
+      select: {
+        id: true,
+        assetId: true,
+        status: true,
+        type: true,
+        userId: true,
+        departmentId: true,
+        notes: true,
+      },
     });
 
     if (!assignment) {
@@ -81,6 +90,26 @@ export async function PATCH(
         });
       }
 
+      await createAuditLog({
+        db: tx,
+        request,
+        userId: session.user.id,
+        action: "UPDATE",
+        entity: "assignment",
+        entityId: assignment.id,
+        assetId: assignment.assetId,
+        description: `Asignacion actualizada (${assignment.id})`,
+        oldValue: assignment,
+        newValue: {
+          status: updated.status,
+          type: updated.type,
+          userId: updated.userId,
+          departmentId: updated.departmentId,
+          returnedAt: updated.returnedAt,
+          notes: updated.notes,
+        },
+      });
+
       return updated;
     });
 
@@ -96,12 +125,12 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error } = await requireRoles(["ADMIN", "EDITOR"]);
-    if (error) {
+    const { error, session } = await requireRoles(["ADMIN", "EDITOR"]);
+    if (error || !session) {
       return error;
     }
 
@@ -120,6 +149,18 @@ export async function DELETE(
       await tx.asset.update({
         where: { id: assignment.assetId },
         data: { status: "AVAILABLE" },
+      });
+
+      await createAuditLog({
+        db: tx,
+        request,
+        userId: session.user.id,
+        action: "DELETE",
+        entity: "assignment",
+        entityId: assignment.id,
+        assetId: assignment.assetId,
+        description: `Asignacion eliminada (${assignment.id})`,
+        oldValue: assignment,
       });
     });
 
