@@ -35,6 +35,13 @@ export default function ChatPage() {
   const [input, setInput] = React.useState("");
   const [isLoading, setIsLoading] = React.useState(false);
   const messagesEndRef = React.useRef<HTMLDivElement>(null);
+  const messageIdRef = React.useRef(2);
+
+  const getNextMessageId = () => {
+    const nextId = messageIdRef.current;
+    messageIdRef.current += 1;
+    return String(nextId);
+  };
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -49,7 +56,7 @@ export default function ChatPage() {
     if (!messageText.trim() || isLoading) return;
 
     const userMessage: Message = {
-      id: Date.now().toString(),
+      id: getNextMessageId(),
       role: "user",
       content: messageText,
       timestamp: new Date(),
@@ -73,7 +80,7 @@ export default function ChatPage() {
       };
 
       const assistantMessage: Message = {
-        id: (Date.now() + 1).toString(),
+        id: getNextMessageId(),
         role: "assistant",
         content:
           responses[messageText] ||
