@@ -94,7 +94,7 @@ function getActionBadgeVariant(action: string): "default" | "secondary" | "destr
     return "default";
   }
 
-  if (action === "UPDATE" || action === "PATCH" || action === "SET_PRIMARY") {
+  if (action === "UPDATE" || action === "PATCH" || action === "SET_PRIMARY" || action === "TRANSFER") {
     return "secondary";
   }
 

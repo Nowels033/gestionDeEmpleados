@@ -38,17 +38,31 @@ export async function GET(request: Request) {
         select: {
           id: true,
           name: true,
+          qrCode: true,
           status: true,
+          assignments: {
+            where: { status: "ACTIVE" },
+            select: { id: true },
+            take: 1,
+          },
         },
         orderBy: { name: "asc" },
       });
 
+      const options = optionAssets.map((asset) => ({
+        id: asset.id,
+        name: asset.name,
+        qrCode: asset.qrCode,
+        status: asset.status,
+        hasActiveAssignment: asset.assignments.length > 0,
+      }));
+
       const durationMs = performance.now() - startedAt;
       if (process.env.NODE_ENV !== "production") {
-        console.info(`[api] GET /api/activos?view=options ${durationMs.toFixed(1)}ms rows=${optionAssets.length}`);
+        console.info(`[api] GET /api/activos?view=options ${durationMs.toFixed(1)}ms rows=${options.length}`);
       }
 
-      return NextResponse.json(optionAssets, {
+      return NextResponse.json(options, {
         headers: {
           "Cache-Control": LIST_CACHE_CONTROL,
           "Server-Timing": `total;dur=${durationMs.toFixed(1)}`,

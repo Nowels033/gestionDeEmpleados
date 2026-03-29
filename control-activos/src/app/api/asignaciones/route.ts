@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuthenticated, requireRoles } from "@/lib/api-auth";
 import { createAuditLog } from "@/lib/audit-log";
+import { syncAssetStatusFromAssignments } from "@/lib/asset-assignment-sync";
 import { z } from "zod";
 
 const createAssignmentSchema = z
@@ -96,9 +97,24 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Activo no encontrado" }, { status: 404 });
     }
 
-    if (asset.status !== "AVAILABLE") {
+    if (asset.status === "RETIRED" || asset.status === "MAINTENANCE") {
       return NextResponse.json(
-        { error: "Solo se pueden asignar activos disponibles" },
+        { error: "No se puede asignar un activo retirado o en mantenimiento" },
+        { status: 409 }
+      );
+    }
+
+    const activeAssignment = await prisma.assignment.findFirst({
+      where: {
+        assetId: body.assetId,
+        status: "ACTIVE",
+      },
+      select: { id: true },
+    });
+
+    if (activeAssignment) {
+      return NextResponse.json(
+        { error: "El activo ya tiene una asignacion activa" },
         { status: 409 }
       );
     }
@@ -119,10 +135,7 @@ export async function POST(request: Request) {
         },
       });
 
-      await tx.asset.update({
-        where: { id: body.assetId },
-        data: { status: "ASSIGNED" },
-      });
+      await syncAssetStatusFromAssignments(tx, body.assetId);
 
       await createAuditLog({
         db: tx,

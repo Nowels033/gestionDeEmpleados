@@ -85,6 +85,7 @@ interface AssetOption {
   name: string;
   qrCode: string | null;
   status: string;
+  hasActiveAssignment?: boolean;
 }
 
 interface UserOption {
@@ -152,7 +153,12 @@ export default function AsignacionesPage() {
     notes: "",
   });
 
-  const availableAssets = assets.filter((asset) => asset.status === "AVAILABLE");
+  const availableAssets = assets.filter(
+    (asset) =>
+      !asset.hasActiveAssignment &&
+      asset.status !== "RETIRED" &&
+      asset.status !== "MAINTENANCE"
+  );
 
   const [filtersHydrated, setFiltersHydrated] = React.useState(false);
 
@@ -285,6 +291,11 @@ export default function AsignacionesPage() {
   };
 
   const openReturnDialog = (assignment: Assignment) => {
+    if (assignment.status !== "ACTIVE") {
+      toast.error("Solo se pueden devolver asignaciones activas");
+      return;
+    }
+
     setSelectedAssignment(assignment);
     setReturnDialogOpen(true);
   };
@@ -320,6 +331,11 @@ export default function AsignacionesPage() {
   };
 
   const openTransferDialog = (assignment: Assignment) => {
+    if (assignment.status !== "ACTIVE") {
+      toast.error("Solo se pueden transferir asignaciones activas");
+      return;
+    }
+
     setSelectedAssignment(assignment);
     setTransferData({
       type: assignment.type,
@@ -930,11 +946,17 @@ export default function AsignacionesPage() {
                             <Edit className="h-4 w-4 mr-2" />
                             Editar
                           </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => openTransferDialog(assignment)}>
+                          <DropdownMenuItem
+                            onClick={() => openTransferDialog(assignment)}
+                            disabled={assignment.status !== "ACTIVE"}
+                          >
                             <ArrowLeftRight className="h-4 w-4 mr-2" />
                             Transferir
                           </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => openReturnDialog(assignment)}>
+                          <DropdownMenuItem
+                            onClick={() => openReturnDialog(assignment)}
+                            disabled={assignment.status !== "ACTIVE"}
+                          >
                             <XCircle className="h-4 w-4 mr-2" />
                             Devolver
                           </DropdownMenuItem>

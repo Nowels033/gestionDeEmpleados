@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireRoles } from "@/lib/api-auth";
 import { createAuditLog } from "@/lib/audit-log";
+import { syncAssetStatusFromAssignments } from "@/lib/asset-assignment-sync";
 import { z } from "zod";
 
 const updateAssignmentSchema = z.object({
@@ -12,6 +13,26 @@ const updateAssignmentSchema = z.object({
   notes: z.string().trim().nullable().optional(),
   returnedAt: z.coerce.date().nullable().optional(),
 });
+
+function validateDestination(
+  type: "PERSONAL" | "DEPARTAMENTAL",
+  userId: string | null,
+  departmentId: string | null
+) {
+  if (type === "PERSONAL" && !userId) {
+    return "Debes seleccionar un usuario para asignacion personal";
+  }
+
+  if (type === "DEPARTAMENTAL" && !departmentId) {
+    return "Debes seleccionar un departamento para asignacion departamental";
+  }
+
+  return null;
+}
+
+function hasTransferPayload(body: z.infer<typeof updateAssignmentSchema>) {
+  return body.type !== undefined || body.userId !== undefined || body.departmentId !== undefined;
+}
 
 export async function PATCH(
   request: Request,
@@ -32,6 +53,8 @@ export async function PATCH(
       select: {
         id: true,
         assetId: true,
+        assignedAt: true,
+        returnedAt: true,
         status: true,
         type: true,
         userId: true,
@@ -44,14 +67,198 @@ export async function PATCH(
       return NextResponse.json({ error: "Asignacion no encontrada" }, { status: 404 });
     }
 
+    const nextType = body.type ?? assignment.type;
+    const nextUserId = body.userId !== undefined ? body.userId : assignment.userId;
+    const nextDepartmentId =
+      body.departmentId !== undefined ? body.departmentId : assignment.departmentId;
+
+    const destinationError = validateDestination(nextType, nextUserId, nextDepartmentId);
+    if (destinationError) {
+      return NextResponse.json({ error: destinationError }, { status: 400 });
+    }
+
+    const destinationChanged =
+      nextType !== assignment.type ||
+      nextUserId !== assignment.userId ||
+      nextDepartmentId !== assignment.departmentId;
+
+    if (body.status === "TRANSFERRED" && hasTransferPayload(body) && !destinationChanged) {
+      return NextResponse.json(
+        { error: "Selecciona un destino diferente para transferir" },
+        { status: 400 }
+      );
+    }
+
+    const isTransferOperation =
+      body.status === "TRANSFERRED" && hasTransferPayload(body) && destinationChanged;
+
+    if (body.status === "ACTIVE") {
+      const conflictingActiveAssignment = await prisma.assignment.findFirst({
+        where: {
+          id: { not: assignment.id },
+          assetId: assignment.assetId,
+          status: "ACTIVE",
+        },
+        select: { id: true },
+      });
+
+      if (conflictingActiveAssignment) {
+        return NextResponse.json(
+          { error: "El activo ya tiene otra asignacion activa" },
+          { status: 409 }
+        );
+      }
+    }
+
+    if (isTransferOperation && assignment.status !== "ACTIVE") {
+      return NextResponse.json(
+        { error: "Solo se pueden transferir asignaciones activas" },
+        { status: 409 }
+      );
+    }
+
+    if (isTransferOperation) {
+      const transferredAssignment = await prisma.$transaction(async (tx) => {
+        const previousAssignment = await tx.assignment.update({
+          where: { id },
+          data: {
+            status: "TRANSFERRED",
+            returnedAt: body.returnedAt || new Date(),
+          },
+          include: {
+            asset: {
+              select: {
+                id: true,
+                name: true,
+                category: { select: { name: true } },
+              },
+            },
+            user: {
+              select: {
+                id: true,
+                name: true,
+                lastName: true,
+              },
+            },
+            department: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+          },
+        });
+
+        const createdAssignment = await tx.assignment.create({
+          data: {
+            type: nextType,
+            status: "ACTIVE",
+            assetId: assignment.assetId,
+            userId: nextType === "PERSONAL" ? nextUserId : null,
+            departmentId: nextType === "DEPARTAMENTAL" ? nextDepartmentId : null,
+            notes: body.notes !== undefined ? body.notes : assignment.notes,
+          },
+          include: {
+            asset: {
+              select: {
+                id: true,
+                name: true,
+                category: { select: { name: true } },
+              },
+            },
+            user: {
+              select: {
+                id: true,
+                name: true,
+                lastName: true,
+              },
+            },
+            department: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+          },
+        });
+
+        await syncAssetStatusFromAssignments(tx, assignment.assetId);
+
+        await createAuditLog({
+          db: tx,
+          request,
+          userId: session.user.id,
+          action: "TRANSFER",
+          entity: "assignment",
+          entityId: assignment.id,
+          assetId: assignment.assetId,
+          description: `Asignacion transferida (${assignment.id})`,
+          oldValue: {
+            id: assignment.id,
+            type: assignment.type,
+            status: assignment.status,
+            userId: assignment.userId,
+            departmentId: assignment.departmentId,
+            assignedAt: assignment.assignedAt,
+            returnedAt: assignment.returnedAt,
+          },
+          newValue: {
+            transferredAssignmentId: previousAssignment.id,
+            newAssignmentId: createdAssignment.id,
+            type: createdAssignment.type,
+            userId: createdAssignment.userId,
+            departmentId: createdAssignment.departmentId,
+            status: createdAssignment.status,
+          },
+        });
+
+        return createdAssignment;
+      });
+
+      return NextResponse.json(transferredAssignment);
+    }
+
     const updatedAssignment = await prisma.$transaction(async (tx) => {
+      const data: {
+        status?: "ACTIVE" | "RETURNED" | "TRANSFERRED";
+        type?: "PERSONAL" | "DEPARTAMENTAL";
+        userId?: string | null;
+        departmentId?: string | null;
+        notes?: string | null;
+        returnedAt?: Date | null;
+      } = {};
+
+      if (body.status !== undefined) {
+        data.status = body.status;
+      }
+
+      if (body.type !== undefined) {
+        data.type = body.type;
+      }
+
+      if (body.userId !== undefined || body.type !== undefined) {
+        data.userId = nextType === "PERSONAL" ? nextUserId : null;
+      }
+
+      if (body.departmentId !== undefined || body.type !== undefined) {
+        data.departmentId = nextType === "DEPARTAMENTAL" ? nextDepartmentId : null;
+      }
+
+      if (body.notes !== undefined) {
+        data.notes = body.notes;
+      }
+
+      if (body.status === "RETURNED" || body.status === "TRANSFERRED") {
+        data.returnedAt = body.returnedAt || new Date();
+      } else if (body.status === "ACTIVE") {
+        data.returnedAt = null;
+      } else if (body.returnedAt !== undefined) {
+        data.returnedAt = body.returnedAt;
+      }
+
       const updated = await tx.assignment.update({
         where: { id },
-        data: {
-          ...body,
-          returnedAt:
-            body.status === "RETURNED" ? body.returnedAt || new Date() : body.returnedAt,
-        },
+        data,
         include: {
           asset: {
             select: {
@@ -76,19 +283,7 @@ export async function PATCH(
         },
       });
 
-      if (body.status === "RETURNED") {
-        await tx.asset.update({
-          where: { id: assignment.assetId },
-          data: { status: "AVAILABLE" },
-        });
-      }
-
-      if (body.status === "ACTIVE" || body.status === "TRANSFERRED") {
-        await tx.asset.update({
-          where: { id: assignment.assetId },
-          data: { status: "ASSIGNED" },
-        });
-      }
+      await syncAssetStatusFromAssignments(tx, assignment.assetId);
 
       await createAuditLog({
         db: tx,
@@ -137,7 +332,14 @@ export async function DELETE(
     const { id } = await params;
     const assignment = await prisma.assignment.findUnique({
       where: { id },
-      select: { id: true, assetId: true },
+      select: {
+        id: true,
+        assetId: true,
+        status: true,
+        type: true,
+        userId: true,
+        departmentId: true,
+      },
     });
 
     if (!assignment) {
@@ -146,10 +348,7 @@ export async function DELETE(
 
     await prisma.$transaction(async (tx) => {
       await tx.assignment.delete({ where: { id } });
-      await tx.asset.update({
-        where: { id: assignment.assetId },
-        data: { status: "AVAILABLE" },
-      });
+      await syncAssetStatusFromAssignments(tx, assignment.assetId);
 
       await createAuditLog({
         db: tx,
