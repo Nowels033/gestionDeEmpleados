@@ -294,7 +294,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background soft-grid">
       <a
         href="#main-content"
         className="sr-only fixed left-4 top-4 z-[90] rounded-md border border-border bg-card px-3 py-2 text-sm font-medium text-foreground focus:not-sr-only"
@@ -316,12 +316,12 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-50 w-72 border-r border-border bg-sidebar/95 backdrop-blur-xl transition-transform duration-300 ease-in-out motion-reduce:transition-none lg:translate-x-0",
+          "fixed inset-y-0 left-0 z-50 w-72 border-r border-border bg-[linear-gradient(180deg,rgba(16,16,16,0.97)_0%,rgba(10,10,10,0.97)_100%)] backdrop-blur-xl transition-transform duration-300 ease-in-out motion-reduce:transition-none lg:translate-x-0",
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
         <div className="flex h-full flex-col">
-          <div className="flex h-[74px] items-center justify-between border-b border-border px-5">
+          <div className="flex h-[74px] items-center justify-between border-b border-border bg-[linear-gradient(180deg,rgba(255,255,255,0.02)_0%,rgba(255,255,255,0)_100%)] px-5">
             <Link
               href="/"
               className="min-w-0"
@@ -353,8 +353,8 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                   className={cn(
                     "group relative flex items-center gap-3 rounded-lg border px-3.5 py-2.5 text-sm font-medium tracking-[0.01em] transition-all duration-200 ease-in-out",
                     isActive
-                      ? "border-primary/25 bg-primary/10 text-foreground shadow-[inset_2px_0_0_rgba(0,242,254,1)]"
-                      : "border-transparent text-muted-foreground hover:border-border hover:bg-card hover:text-foreground"
+                      ? "border-primary/30 bg-[linear-gradient(135deg,rgba(0,242,254,0.16)_0%,rgba(0,242,254,0.06)_100%)] text-foreground shadow-[inset_2px_0_0_rgba(0,242,254,1)]"
+                      : "border-transparent text-muted-foreground hover:border-border hover:bg-[linear-gradient(180deg,#141414_0%,#101010_100%)] hover:text-foreground"
                   )}
                 >
                   <item.icon className="h-[18px] w-[18px]" />
@@ -372,8 +372,8 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
               className={cn(
                 "group relative flex items-center gap-3 rounded-lg border px-3.5 py-2.5 text-sm font-medium tracking-[0.01em] transition-all duration-200 ease-in-out",
                 pathname === "/configuracion"
-                  ? "border-primary/25 bg-primary/10 text-foreground shadow-[inset_2px_0_0_rgba(0,242,254,1)]"
-                  : "border-transparent text-muted-foreground hover:border-border hover:bg-card hover:text-foreground"
+                  ? "border-primary/30 bg-[linear-gradient(135deg,rgba(0,242,254,0.16)_0%,rgba(0,242,254,0.06)_100%)] text-foreground shadow-[inset_2px_0_0_rgba(0,242,254,1)]"
+                  : "border-transparent text-muted-foreground hover:border-border hover:bg-[linear-gradient(180deg,#141414_0%,#101010_100%)] hover:text-foreground"
               )}
             >
               <Settings className="h-[18px] w-[18px]" />
@@ -384,7 +384,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       </aside>
 
       <div className="lg:pl-72">
-        <header className="sticky top-0 z-30 flex h-[74px] items-center justify-between border-b border-border bg-background/90 px-4 backdrop-blur-xl lg:px-8">
+        <header className="sticky top-0 z-30 flex h-[74px] items-center justify-between border-b border-border bg-background/70 px-4 backdrop-blur-xl supports-[backdrop-filter]:bg-background/62 lg:px-8">
           <div className="flex items-center gap-3">
             <Button
               variant="ghost"
@@ -398,7 +398,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
             <button
               type="button"
-              className="hidden w-72 items-center gap-2.5 rounded-lg border border-border bg-card px-4 py-2 text-left text-sm text-muted-foreground transition-all duration-200 ease-in-out hover:border-border hover:bg-accent sm:flex"
+              className="hidden w-72 items-center gap-2.5 rounded-lg border border-border bg-[linear-gradient(180deg,#121212_0%,#0f0f0f_100%)] px-4 py-2 text-left text-sm text-muted-foreground shadow-[0_1px_0_rgba(255,255,255,0.03)_inset] transition-all duration-200 ease-in-out hover:border-primary/30 hover:text-foreground sm:flex"
               onClick={() => setSearchOpen(true)}
               aria-haspopup="dialog"
               aria-expanded={searchOpen}
@@ -497,8 +497,10 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
           </div>
         </header>
 
-        <main id="main-content" className="p-5 lg:p-9">
-          <div className="app-surface p-5 lg:p-7">{children}</div>
+        <main id="main-content" className="p-4 md:p-6 lg:p-8">
+          <div className="mx-auto w-full max-w-[1600px]">
+            <div className="app-surface p-5 lg:p-7">{children}</div>
+          </div>
         </main>
       </div>
 

@@ -19,14 +19,17 @@ export function DashboardPageHeader({
   return (
     <div
       className={cn(
-        "rounded-xl border border-border bg-card px-6 py-5 shadow-[0_1px_0_rgba(255,255,255,0.03)_inset] md:px-7 md:py-6",
+        "relative overflow-hidden rounded-xl border border-border bg-[linear-gradient(180deg,#121212_0%,#0f0f0f_100%)] px-6 py-5 shadow-[0_1px_0_rgba(255,255,255,0.03)_inset,0_20px_36px_-30px_rgba(0,0,0,0.9)] before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:h-px before:bg-[linear-gradient(90deg,transparent,rgba(0,242,254,0.55),transparent)] md:px-7 md:py-6",
         className
       )}
     >
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="space-y-2">
           {eyebrow ? (
-            <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">{eyebrow}</p>
+            <p className="inline-flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+              <span className="h-1.5 w-1.5 rounded-full bg-primary/80" />
+              {eyebrow}
+            </p>
           ) : null}
           <h1 className="text-2xl font-semibold tracking-[-0.02em] md:text-3xl">{title}</h1>
           {description ? (
@@ -35,7 +38,7 @@ export function DashboardPageHeader({
             </p>
           ) : null}
         </div>
-        {actions ? <div className="flex flex-wrap items-center gap-2.5">{actions}</div> : null}
+        {actions ? <div className="flex flex-wrap items-center gap-2.5 sm:justify-end">{actions}</div> : null}
       </div>
     </div>
   );
