@@ -142,7 +142,7 @@ export default function AuditoriaPage() {
     return `/api/auditoria?${params.toString()}`;
   }, [searchQuery, entityFilter, actionFilter, userFilter, fromDate, toDate, currentPage]);
 
-  const { data, loading } = useFetch<AuditLogResponse>(endpoint, defaultAuditResponse);
+  const { data, loading, error } = useFetch<AuditLogResponse>(endpoint, defaultAuditResponse);
 
   React.useEffect(() => {
     setCurrentPage(1);
@@ -184,6 +184,16 @@ export default function AuditoriaPage() {
 
   if (loading) {
     return <Loading text="Cargando bitacora..." />;
+  }
+
+  if (error) {
+    return (
+      <EmptyState
+        icon={Activity}
+        title="No fue posible cargar la bitacora"
+        description="Verifica tus permisos o vuelve a intentarlo en unos minutos."
+      />
+    );
   }
 
   return (

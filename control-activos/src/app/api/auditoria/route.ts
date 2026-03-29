@@ -30,7 +30,7 @@ function parseDateFilter(value: string | undefined): Date | null {
 
 export async function GET(request: Request) {
   try {
-    const { error } = await requireRoles(["ADMIN", "EDITOR", "USER"]);
+    const { error } = await requireRoles(["ADMIN", "EDITOR"]);
     if (error) {
       return error;
     }

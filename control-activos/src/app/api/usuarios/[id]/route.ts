@@ -53,6 +53,45 @@ export async function PATCH(
       return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 });
     }
 
+    const isAdmin = session.user.role === "ADMIN";
+
+    if (!isAdmin && previousUser.role === "ADMIN") {
+      return NextResponse.json(
+        { error: "Solo un administrador puede modificar usuarios administradores" },
+        { status: 403 }
+      );
+    }
+
+    if (!isAdmin) {
+      if (body.role !== undefined) {
+        return NextResponse.json(
+          { error: "Solo un administrador puede cambiar roles" },
+          { status: 403 }
+        );
+      }
+
+      if (body.isActive !== undefined) {
+        return NextResponse.json(
+          { error: "Solo un administrador puede activar o desactivar usuarios" },
+          { status: 403 }
+        );
+      }
+
+      if (body.password !== undefined) {
+        return NextResponse.json(
+          { error: "Solo un administrador puede restablecer contrasenas" },
+          { status: 403 }
+        );
+      }
+    }
+
+    if (body.photo !== undefined && body.photo !== null && !body.photo.startsWith("/uploads/user-photos/")) {
+      return NextResponse.json(
+        { error: "Ruta de foto invalida" },
+        { status: 400 }
+      );
+    }
+
     const data: Record<string, unknown> = { ...body };
     if (body.password) {
       data.password = await bcrypt.hash(body.password, 12);
