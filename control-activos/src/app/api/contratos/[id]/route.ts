@@ -51,6 +51,16 @@ export async function PATCH(
       return NextResponse.json({ error: "Contrato no encontrado" }, { status: 404 });
     }
 
+    const nextStartDate = body.startDate ?? previousContract.startDate;
+    const nextEndDate = body.endDate ?? previousContract.endDate;
+
+    if (nextStartDate > nextEndDate) {
+      return NextResponse.json(
+        { error: "La fecha de inicio no puede ser mayor a la fecha de fin" },
+        { status: 400 }
+      );
+    }
+
     const contract = await prisma.contract.update({
       where: { id },
       data: body,

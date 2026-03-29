@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireRoles } from "@/lib/api-auth";
 import { createAuditLog } from "@/lib/audit-log";
+import { syncAssetStatusFromAssignments } from "@/lib/asset-assignment-sync";
 import { z } from "zod";
 
 const updateMaintenanceSchema = z.object({
@@ -47,17 +48,47 @@ export async function PATCH(
       return NextResponse.json({ error: "Mantenimiento no encontrado" }, { status: 404 });
     }
 
-    const maintenanceLog = await prisma.maintenanceLog.update({
-      where: { id },
-      data: body,
-      include: {
-        asset: {
-          select: { id: true, name: true, qrCode: true },
+    const updateData: {
+      type?: "PREVENTIVE" | "CORRECTIVE" | "EMERGENCY";
+      description?: string;
+      status?: "PENDING" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
+      scheduledDate?: Date;
+      completedDate?: Date | null;
+      cost?: number | null;
+      technicianId?: string | null;
+      notes?: string | null;
+    } = {
+      ...body,
+    };
+
+    if (body.status === "COMPLETED" && body.completedDate === undefined) {
+      updateData.completedDate = new Date();
+    }
+
+    if (
+      (body.status === "PENDING" || body.status === "IN_PROGRESS" || body.status === "CANCELLED") &&
+      body.completedDate === undefined
+    ) {
+      updateData.completedDate = null;
+    }
+
+    const maintenanceLog = await prisma.$transaction(async (tx) => {
+      const updated = await tx.maintenanceLog.update({
+        where: { id },
+        data: updateData,
+        include: {
+          asset: {
+            select: { id: true, name: true, qrCode: true },
+          },
+          technician: {
+            select: { id: true, name: true, lastName: true },
+          },
         },
-        technician: {
-          select: { id: true, name: true, lastName: true },
-        },
-      },
+      });
+
+      await syncAssetStatusFromAssignments(tx, previousMaintenance.assetId);
+
+      return updated;
     });
 
     await createAuditLog({
@@ -122,7 +153,10 @@ export async function DELETE(
       return NextResponse.json({ error: "Mantenimiento no encontrado" }, { status: 404 });
     }
 
-    await prisma.maintenanceLog.delete({ where: { id } });
+    await prisma.$transaction(async (tx) => {
+      await tx.maintenanceLog.delete({ where: { id } });
+      await syncAssetStatusFromAssignments(tx, previousMaintenance.assetId);
+    });
 
     await createAuditLog({
       request,

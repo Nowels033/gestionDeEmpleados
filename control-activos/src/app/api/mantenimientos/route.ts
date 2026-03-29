@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuthenticated, requireRoles } from "@/lib/api-auth";
 import { createAuditLog } from "@/lib/audit-log";
+import { syncAssetStatusFromAssignments } from "@/lib/asset-assignment-sync";
 import { z } from "zod";
 
 const createMaintenanceSchema = z.object({
@@ -61,32 +62,54 @@ export async function POST(request: Request) {
     const rawBody = await request.json();
     const body = createMaintenanceSchema.parse(rawBody);
 
-    const maintenanceLog = await prisma.maintenanceLog.create({
-      data: {
-        assetId: body.assetId,
-        type: body.type,
-        description: body.description,
-        scheduledDate: body.scheduledDate,
-        cost: body.cost,
-        technicianId: body.technicianId || null,
-        notes: body.notes,
-      },
-      include: {
-        asset: {
-          select: {
-            id: true,
-            name: true,
-            qrCode: true,
+    const asset = await prisma.asset.findUnique({
+      where: { id: body.assetId },
+      select: { id: true, status: true },
+    });
+
+    if (!asset) {
+      return NextResponse.json({ error: "Activo no encontrado" }, { status: 404 });
+    }
+
+    if (asset.status === "RETIRED") {
+      return NextResponse.json(
+        { error: "No se puede crear mantenimiento para un activo retirado" },
+        { status: 409 }
+      );
+    }
+
+    const maintenanceLog = await prisma.$transaction(async (tx) => {
+      const created = await tx.maintenanceLog.create({
+        data: {
+          assetId: body.assetId,
+          type: body.type,
+          description: body.description,
+          scheduledDate: body.scheduledDate,
+          cost: body.cost,
+          technicianId: body.technicianId || null,
+          notes: body.notes,
+        },
+        include: {
+          asset: {
+            select: {
+              id: true,
+              name: true,
+              qrCode: true,
+            },
+          },
+          technician: {
+            select: {
+              id: true,
+              name: true,
+              lastName: true,
+            },
           },
         },
-        technician: {
-          select: {
-            id: true,
-            name: true,
-            lastName: true,
-          },
-        },
-      },
+      });
+
+      await syncAssetStatusFromAssignments(tx, body.assetId);
+
+      return created;
     });
 
     await createAuditLog({
