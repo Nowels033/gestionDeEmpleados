@@ -1,17 +1,21 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
+import { getToken } from "next-auth/jwt";
 
-export function proxy(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const isLoginRoute = pathname === "/login";
 
-  const sessionToken =
-    request.cookies.get("authjs.session-token")?.value ||
-    request.cookies.get("__Secure-authjs.session-token")?.value ||
-    request.cookies.get("next-auth.session-token")?.value ||
-    request.cookies.get("__Secure-next-auth.session-token")?.value;
-
-  const isLoggedIn = Boolean(sessionToken);
+  let isLoggedIn = false;
+  try {
+    const token = await getToken({
+      req: request,
+      secret: process.env.NEXTAUTH_SECRET,
+    });
+    isLoggedIn = Boolean(token);
+  } catch {
+    isLoggedIn = false;
+  }
 
   if (!isLoggedIn && !isLoginRoute) {
     return NextResponse.redirect(new URL("/login", request.url));

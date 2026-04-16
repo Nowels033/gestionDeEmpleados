@@ -26,6 +26,8 @@ export function useFetch<T>(url: string, defaultValue: T): UseFetchResult<T> {
   const [error, setError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
+    unmountedRef.current = false;
+
     return () => {
       unmountedRef.current = true;
     };
